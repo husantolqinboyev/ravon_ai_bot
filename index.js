@@ -1,4 +1,5 @@
 const { Telegraf, session, Markup } = require('telegraf');
+const http = require('http');
 const config = require('./config');
 const commandHandler = require('./handlers/commandHandler');
 const audioHandler = require('./handlers/audioHandler');
@@ -212,6 +213,15 @@ const startBot = async (retries = 5) => {
 };
 
 startBot();
+
+// Dummy HTTP server to satisfy Render's port check
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is running\n');
+}).listen(PORT, '0.0.0.0', () => {
+    console.log(`📡 Health check server listening on port ${PORT}`);
+});
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
