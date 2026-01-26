@@ -108,6 +108,7 @@ bot.hears('💳 Karta sozlamalari', (ctx) => commandHandler.handleCardSettings(c
 bot.hears('💰 Tariflar', (ctx) => commandHandler.handleTariffSettings(ctx));
 bot.hears('📩 To\'lov so\'rovlari', (ctx) => commandHandler.handlePaymentRequests(ctx));
 bot.hears('📢 E\'lon berish', (ctx) => commandHandler.handleBroadcastRequest(ctx));
+bot.hears('📊 API Monitoring', (ctx) => commandHandler.handleApiMonitoring(ctx));
 
 // Admin commands with arguments
 bot.command('setcard', (ctx) => commandHandler.handleSetCard(ctx));
@@ -117,6 +118,7 @@ bot.command('addtariff', (ctx) => commandHandler.handleAddTariff(ctx));
 bot.action('admin_set_card', (ctx) => commandHandler.handleSetCardRequest(ctx));
 bot.action('admin_add_tariff', (ctx) => commandHandler.handleAddTariffRequest(ctx));
 bot.action('admin_panel_main', (ctx) => commandHandler.handleAdmin(ctx));
+bot.action('admin_api_monitoring', (ctx) => commandHandler.handleApiMonitoring(ctx));
 bot.action(/select_tariff_(.+)/, (ctx) => commandHandler.handleSelectTariff(ctx));
 bot.action(/delete_tariff_(.+)/, (ctx) => commandHandler.handleDeleteTariff(ctx));
 bot.action(/approve_payment_(.+)/, (ctx) => commandHandler.handleApprovePayment(ctx));
@@ -176,13 +178,14 @@ bot.on('text', async (ctx, next) => {
 bot.on('photo', async (ctx) => {
     if (ctx.session?.state === 'waiting_for_payment_details') {
         const photo = ctx.message.photo[ctx.message.photo.length - 1];
-        const caption = ctx.message.caption || '';
+        const caption = ctx.message.caption || 'Izohsiz yuborildi';
         
-        if (!caption || caption.length < 5) {
-            return ctx.reply("⚠️ Iltimos, rasm bilan birga ismingizni va to'lov tafsilotlarini (caption qismida) yuboring.");
+        const tariff = ctx.session.selectedTariff;
+        if (!tariff) {
+            ctx.session.state = null;
+            return ctx.reply("⚠️ Seans muddati tugagan ko'rinadi. Iltimos, Premium menyusidan tarifni qaytadan tanlang.");
         }
 
-        const tariff = ctx.session.selectedTariff;
         const user = await database.getUserByTelegramId(ctx.from.id);
         
         await database.createPaymentRequest(user.id, tariff.id, photo.file_id, caption);
@@ -196,8 +199,18 @@ bot.on('photo', async (ctx) => {
         const admins = await database.getAdmins();
         for (const admin of admins) {
             try {
-                await ctx.telegram.sendMessage(admin.telegram_id, `📩 *Yangi to'lov so'rovi keldi!* \n\nFoydalanuvchi: ${ctx.from.first_name} \nTarif: ${tariff.name}\n\nKo'rish uchun /admin panelidan '📩 To'lov so'rovlari' bo'limiga kiring.`, { parse_mode: 'Markdown' });
-            } catch (e) {}
+                await ctx.telegram.sendPhoto(admin.telegram_id, photo.file_id, {
+                    caption: `� *Yangi to'lov so'rovi!*\n\n` +
+                        `👤 Foydalanuvchi: ${ctx.from.first_name} (${ctx.from.username || 'username yo\'q'})\n` +
+                        `💎 Tarif: ${tariff.name}\n` +
+                        `💵 Narxi: ${tariff.price.toLocaleString()} so'm\n` +
+                        `📝 Izoh: ${caption}\n\n` +
+                        `Tasdiqlash yoki rad etish uchun 'To'lov so'rovlari' bo'limiga kiring.`,
+                    parse_mode: 'Markdown'
+                });
+            } catch (err) {
+                console.error(`Admin ${admin.telegram_id}ga xabar yuborishda xato:`, err);
+            }
         }
         return;
     }

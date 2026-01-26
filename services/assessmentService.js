@@ -13,6 +13,21 @@ class AssessmentService {
             // Step 1: Analyze audio with Gemini
             const assessment = await geminiService.analyzeAudio(audioBuffer, mimeType, type, targetText);
             
+            // Log API usage if available
+            if (assessment._usage) {
+                try {
+                    await database.logApiUsage(
+                        assessment._model,
+                        assessment._usage.promptTokenCount,
+                        assessment._usage.candidatesTokenCount,
+                        assessment._usage.totalTokenCount,
+                        `assessment_${type}`
+                    );
+                } catch (logError) {
+                    console.error('Failed to log API usage:', logError);
+                }
+            }
+
             // Step 2: Save assessment to database
             const userId = await database.saveUser(user);
             await database.saveAssessment(userId, {

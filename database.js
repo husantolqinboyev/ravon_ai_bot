@@ -87,6 +87,16 @@ class Database {
             `CREATE TABLE IF NOT EXISTS bot_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT
+            )`,
+
+            `CREATE TABLE IF NOT EXISTS api_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model_name TEXT,
+                prompt_tokens INTEGER,
+                candidates_tokens INTEGER,
+                total_tokens INTEGER,
+                request_type TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`
         ];
 
@@ -560,7 +570,18 @@ class Database {
         return new Promise((resolve, reject) => {
             this.db.all('SELECT telegram_id FROM users WHERE is_admin = 1', (err, rows) => {
                 if (err) reject(err);
-                else resolve(rows || []);
+                else {
+                    let admins = rows || [];
+                    // Add admins from config if not already in the list
+                    if (config.ADMIN_IDS) {
+                        config.ADMIN_IDS.forEach(id => {
+                            if (!admins.find(a => String(a.telegram_id) === String(id))) {
+                                admins.push({ telegram_id: parseInt(id) });
+                            }
+                        });
+                    }
+                    resolve(admins);
+                }
             });
         });
     }
@@ -630,6 +651,55 @@ class Database {
             this.db.get(query, [telegramId], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
+            });
+        });
+    }
+
+    async logApiUsage(modelName, promptTokens, candidatesTokens, totalTokens, requestType = 'assessment') {
+        return new Promise((resolve, reject) => {
+            const query = `
+                INSERT INTO api_usage (model_name, prompt_tokens, candidates_tokens, total_tokens, request_type)
+                VALUES (?, ?, ?, ?, ?)
+            `;
+            this.db.run(query, [modelName, promptTokens, candidatesTokens, totalTokens, requestType], function(err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+            });
+        });
+    }
+
+    async getApiStats() {
+        return new Promise((resolve, reject) => {
+            const query = `
+                SELECT 
+                    model_name,
+                    COUNT(*) as total_requests,
+                    SUM(prompt_tokens) as total_prompt_tokens,
+                    SUM(candidates_tokens) as total_candidates_tokens,
+                    SUM(total_tokens) as total_tokens
+                FROM api_usage
+                GROUP BY model_name
+            `;
+            this.db.all(query, (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+    }
+
+    async getTotalApiUsage() {
+        return new Promise((resolve, reject) => {
+            const query = `
+                SELECT 
+                    COUNT(*) as total_requests,
+                    SUM(prompt_tokens) as total_prompt_tokens,
+                    SUM(candidates_tokens) as total_candidates_tokens,
+                    SUM(total_tokens) as total_tokens
+                FROM api_usage
+            `;
+            this.db.get(query, (err, row) => {
+                if (err) reject(err);
+                else resolve(row || { total_requests: 0, total_prompt_tokens: 0, total_candidates_tokens: 0, total_tokens: 0 });
             });
         });
     }

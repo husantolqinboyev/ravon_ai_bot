@@ -180,16 +180,25 @@ class GeminiService {
 
             const response = await result.response;
             const text = response.text();
+            const usage = response.usageMetadata;
             
+            let assessmentData;
             try {
-                return JSON.parse(text);
+                assessmentData = JSON.parse(text);
             } catch (e) {
                 const jsonMatch = text.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
-                    return JSON.parse(jsonMatch[0]);
+                    assessmentData = JSON.parse(jsonMatch[0]);
+                } else {
+                    throw new Error("Gemini returned invalid JSON format.");
                 }
-                throw new Error("Gemini returned invalid JSON format.");
             }
+
+            return {
+                ...assessmentData,
+                _usage: usage,
+                _model: this.modelName
+            };
         } catch (error) {
             // Handle 429 (Quota) and 503 (Overloaded) errors
             const isRetryable = error.status === 404 || error.status === 429 || error.status === 503 || 

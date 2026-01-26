@@ -20,7 +20,7 @@ class CommandHandler {
             ['📊 Umumiy statistika', '👨‍🏫 O\'qituvchilar'],
             ['💳 Karta sozlamalari', '💰 Tariflar'],
             ['📩 To\'lov so\'rovlari', '📢 E\'lon berish'],
-            ['🔙 Asosiy menyu']
+            ['📊 API Monitoring', '🔙 Asosiy menyu']
         ]).resize();
 
         this.teacherMenu = Markup.keyboard([
@@ -689,8 +689,9 @@ class CommandHandler {
             return ctx.reply('Bekor qilindi.', this.adminMenu);
         }
 
-        const parts = text.split(' ');
-        if (parts.length < 2) return ctx.reply("❌ Format noto'g'ri. Iltimos, karta raqami va egasini yozing. Misol: `8600123456789012 Eshmat Toshmatov`", { parse_mode: 'Markdown' });
+        // Split by space but handle multiple spaces
+        const parts = text.trim().split(/\s+/);
+        if (parts.length < 2) return ctx.reply("❌ Format noto'g'ri. Iltimos, karta raqami va egasini yozing.\n\nMisol: `8600123456789012 Eshmat Toshmatov`", { parse_mode: 'Markdown' });
 
         const cardNum = parts[0];
         const cardHolder = parts.slice(1).join(' ');
@@ -756,8 +757,9 @@ class CommandHandler {
             return ctx.reply('Bekor qilindi.', this.adminMenu);
         }
 
-        const parts = text.split(' ');
-        if (parts.length < 4) return ctx.reply("❌ Format noto'g'ri. Misol: `Standard 50000 30 50`", { parse_mode: 'Markdown' });
+        // Split by space but handle multiple spaces
+        const parts = text.trim().split(/\s+/);
+        if (parts.length < 4) return ctx.reply("❌ Format noto'g'ri. Iltimos, quyidagicha yuboring:\n\n`NOM NARX KUN LIMIT`.\n\nMisol: `Standard 50000 30 50`", { parse_mode: 'Markdown' });
 
         const name = parts[0];
         const price = parseInt(parts[1]);
@@ -765,12 +767,56 @@ class CommandHandler {
         const limit = parseInt(parts[3]);
 
         if (isNaN(price) || isNaN(duration) || isNaN(limit)) {
-            return ctx.reply("❌ Narx, kun va limit son bo'lishi kerak.");
+            return ctx.reply("❌ Narx, kun va limit son bo'lishi kerak. Misol: `Standard 50000 30 50`", { parse_mode: 'Markdown' });
         }
 
         await database.addTariff(name, price, duration, limit);
         ctx.session.state = null;
         await ctx.reply(`✅ Yangi tarif qo'shildi: *${name}*`, { parse_mode: 'Markdown', ...this.adminMenu });
+    }
+
+    async handleApiMonitoring(ctx) {
+        try {
+            const isAdmin = await database.isAdmin(ctx.from.id);
+            if (!isAdmin) return;
+
+            const totalUsage = await database.getTotalApiUsage();
+            const modelStats = await database.getApiStats();
+
+            let msg = `📊 *Gemini API Monitoring*\n\n`;
+            
+            msg += `📈 *Umumiy statistika:*\n`;
+            msg += `• Jami so'rovlar: \`${totalUsage.total_requests}\`\n`;
+            msg += `• Jami prompt tokenlar: \`${totalUsage.total_prompt_tokens?.toLocaleString() || 0}\`\n`;
+            msg += `• Jami javob tokenlar: \`${totalUsage.total_candidates_tokens?.toLocaleString() || 0}\`\n`;
+            msg += `• *Jami sarf qilingan tokenlar:* \`${totalUsage.total_tokens?.toLocaleString() || 0}\`\n\n`;
+
+            if (modelStats.length > 0) {
+                msg += `🤖 *Modellar bo'yicha:* \n`;
+                modelStats.forEach(stat => {
+                    msg += `\n*${stat.model_name}*:\n`;
+                    msg += `  └ So'rovlar: \`${stat.total_requests}\`\n`;
+                    msg += `  └ Tokenlar: \`${stat.total_tokens.toLocaleString()}\`\n`;
+                });
+            } else {
+                msg += `_Hozircha ma'lumotlar mavjud emas._`;
+            }
+
+            const buttons = [
+                [Markup.button.callback('🔄 Yangilash', 'admin_api_monitoring')],
+                [Markup.button.callback('🔙 Orqaga', 'admin_panel_main')]
+            ];
+
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => {});
+                await ctx.answerCbQuery();
+            } else {
+                await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(buttons));
+            }
+        } catch (error) {
+            console.error('Error in handleApiMonitoring:', error);
+            await ctx.reply('Monitoring ma\'lumotlarini olishda xatolik yuz berdi.');
+        }
     }
 
     async handleDeleteTariff(ctx) {
