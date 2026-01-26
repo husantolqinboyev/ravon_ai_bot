@@ -64,8 +64,9 @@ class CommandHandler {
                 displayUsers = Math.floor(monthlyUsers * 2.5); // Multiply by 2.5
                 userLabel = 'oylik';
             } else {
-                displayUsers = Math.floor(totalUsers * 1.8); // Multiply by 1.8
-                userLabel = 'jami';
+                // Show impressive base number for small user counts
+                displayUsers = Math.floor(Math.random() * 50) + 120; // Random between 120-170
+                userLabel = 'oylik';
             }
         }
         
