@@ -128,7 +128,7 @@ class AudioHandler {
                     "🔗 *Sizning referal havolangiz:*\n" +
                     `\`${referralLink}\``;
                 
-                const shareLink = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Ingliz tili talaffuzini Gemini AI yordamida bepul tahlil qiling! 🚀")}`;
+                const shareLink = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Ingliz tili talaffuzini Ravon AI yordamida bepul tahlil qiling! 🚀")}`;
                 
                 await ctx.replyWithMarkdown(errorMessage, Markup.inlineKeyboard([
                     [Markup.button.url('📤 Do\'stlarga ulashish', shareLink)],
@@ -136,9 +136,9 @@ class AudioHandler {
                 ]));
                 return;
             } else if (error.response?.status === 429 || error.message.includes('429')) {
-                errorMessage = "⚠️ Gemini AI limiti tugadi. Iltimos, birozdan keyin qayta urinib ko'ring.";
+                errorMessage = "⚠️ Ravon AI limiti tugadi. Iltimos, birozdan keyin qayta urinib ko'ring.";
             } else if (error.response?.status === 401 || error.message.includes('401')) {
-                errorMessage = "⚠️ Gemini API kaliti bilan muammo yuz berdi.";
+                errorMessage = "⚠️ Ravon API kaliti bilan muammo yuz berdi.";
             }
             
             await ctx.reply(errorMessage);

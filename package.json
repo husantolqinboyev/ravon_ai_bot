@@ -1,7 +1,7 @@
 {
   "name": "ravon_ai",
   "version": "1.0.0",
-  "description": "Telegram bot for audio assessment using Gemini AI",
+  "description": "Telegram bot for audio assessment using Ravon AI",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

@@ -49,8 +49,17 @@ class CommandHandler {
         const isAdmin = await database.isAdmin(ctx.from.id);
         const isTeacher = await database.isTeacher(ctx.from.id);
         
+        // Get monthly users count
+        const monthlyUsers = await database.getMonthlyUsers();
+        const totalUsers = await database.getTotalUserCount();
+        
+        // Show more impressive number if monthly users are low
+        const displayUsers = monthlyUsers > 100 ? monthlyUsers : totalUsers;
+        const userLabel = monthlyUsers > 100 ? 'oylik foydalanuvchi' : 'jami foydalanuvchi';
+        
         let welcomeMessage = `Assalomu alaykum! 👋\n\n` +
-            `Men sizning ingliz tili talaffuzingizni baholashga yordam beruvchi botman.\n` +
+            `Men **Ravon AI** - sizning ingliz tili talaffuzingizni baholashga yordam beruvchi botman.\n` +
+            `👥 ${displayUsers.toLocaleString()} ${userLabel}\n\n` +
             `Quyidagi bo'limlardan birini tanlang:`;
         
         if (isAdmin) {
@@ -59,7 +68,7 @@ class CommandHandler {
             welcomeMessage += `\n\n👨‍🏫 Siz o'qituvchisiz. O'qituvchi paneliga kirish uchun /teacher buyrug'ini yuboring.`;
         }
 
-        await ctx.reply(welcomeMessage, this.mainMenu);
+        await ctx.replyWithMarkdown(welcomeMessage, this.mainMenu);
     }
 
     async handleAdmin(ctx) {
@@ -573,7 +582,7 @@ class CommandHandler {
             `1️⃣ *Talaffuzni test qilish* - Bot so'z beradi, siz o'qiysiz.\n` +
             `2️⃣ *Matn va Audio* - Siz matn yozasiz, keyin o'qiysiz.\n` +
             `3️⃣ *Matnni audyoga* - Siz matn yozasiz, bot uni o'qib beradi.\n\n` +
-            `📊 Natijalar Gemini AI orqali tahlil qilinadi.`;
+            `📊 Natijalar Ravon AI orqali tahlil qilinadi.`;
         
         await ctx.replyWithMarkdown(helpMessage);
     }
@@ -783,7 +792,7 @@ class CommandHandler {
             const totalUsage = await database.getTotalApiUsage();
             const modelStats = await database.getApiStats();
 
-            let msg = `📊 *Gemini API Monitoring*\n\n`;
+            let msg = `📊 *Ravon AI Monitoring*\n\n`;
             
             msg += `📈 *Umumiy statistika:*\n`;
             msg += `• Jami so'rovlar: \`${totalUsage.total_requests}\`\n`;
@@ -931,7 +940,7 @@ class CommandHandler {
             msg += `⏳ Keyingi bonusgaacha yana *${nextReward}* ta do'stingizni taklif qilishingiz kerak.`;
         }
 
-        const shareLink = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Ingliz tili talaffuzini Gemini AI yordamida bepul tahlil qiling! 🚀")}`;
+        const shareLink = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Ingliz tili talaffuzini Ravon AI yordamida bepul tahlil qiling! 🚀")}`;
 
         await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
             [Markup.button.url('📤 Do\'stlarga ulashish', shareLink)]

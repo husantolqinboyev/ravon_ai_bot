@@ -124,7 +124,7 @@ class AssessmentService {
         feedback.actionPlan.slice(0, 3).forEach(p => response += `🚀 ${p}\n`);
         
         response += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
-        response += `_Gemini AI • Professional Tahlil_`;
+        response += `_Ravon AI • Professional Tahlil_`;
 
         return response;
     }

@@ -6,7 +6,11 @@ module.exports = {
     MAX_AUDIO_DURATION: 30, // seconds
     SUPPORTED_AUDIO_TYPES: ['audio/ogg', 'audio/mpeg', 'audio/wav'],
     
-    // Gemini Settings
+    // Ravon Settings
+    RAVON_API_KEY: process.env.GEMINI_API_KEY,
+    RAVON_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+
+    // Legacy Gemini aliases (for backward compatibility)
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
 

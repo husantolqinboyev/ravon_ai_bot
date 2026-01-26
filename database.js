@@ -687,6 +687,29 @@ class Database {
         });
     }
 
+    async getTotalUserCount() {
+        return new Promise((resolve, reject) => {
+            this.db.get('SELECT COUNT(*) as total FROM users', (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.total : 0);
+            });
+        });
+    }
+
+    async getMonthlyUsers() {
+        return new Promise((resolve, reject) => {
+            const query = `
+                SELECT COUNT(*) as monthly_users 
+                FROM users 
+                WHERE last_active >= datetime('now', '-30 days')
+            `;
+            this.db.get(query, (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.monthly_users : 0);
+            });
+        });
+    }
+
     async getTotalApiUsage() {
         return new Promise((resolve, reject) => {
             const query = `
