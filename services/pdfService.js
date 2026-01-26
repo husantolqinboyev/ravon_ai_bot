@@ -9,10 +9,13 @@ class PdfService {
         this.tempDir = path.join(__dirname, '../temp/reports');
         fs.ensureDirSync(this.tempDir);
         // Windows system fonts
+        // Font paths - flexible for Windows and Linux (Render)
         this.fonts = {
             regular: 'C:\\Windows\\Fonts\\arial.ttf',
             bold: 'C:\\Windows\\Fonts\\arialbd.ttf',
-            italic: 'C:\\Windows\\Fonts\\ariali.ttf'
+            italic: 'C:\\Windows\\Fonts\\ariali.ttf',
+            linux_regular: '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            linux_bold: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
         };
         this.channelUrl = 'https://t.me/englishwithSanatbek';
     }
@@ -37,12 +40,9 @@ class PdfService {
         if (!text) return '';
         // Remove common problematic characters/emojis that PDFKit might struggle with
         return text
-            .replace(/[🚀💡✅❌•]/g, '-') // Replace emojis with dashes for safety
-            .replace(/[\u0080-\uFFFF]/g, (m) => {
-                // Keep some basic Latin-1 but filter out others if needed
-                // For now, let's try to keep most but Arial should handle them
-                return m;
-            });
+            .replace(/[🚀💡✅❌•🌟🎯🏆🎓⚡🎵📖🔍⚖️🐢🔗]/g, '-') // Replace common emojis
+            .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '-') // Remove all 4-byte emojis
+            .replace(/[^\x00-\x7F\u0400-\u04FF\u0100-\u017F]/g, '-'); // Keep basic Latin, Cyrillic, and extended Latin
     }
 
     async generateReport(user, assessment, type = 'general') {
@@ -54,7 +54,7 @@ class PdfService {
                 const filePath = path.join(this.tempDir, fileName);
                 
                 const doc = new PDFDocument({ 
-                    margin: 0, // No margins to prevent automatic page breaks
+                    margin: 0, 
                     size: 'A4',
                     bufferPages: true 
                 });
@@ -81,33 +81,49 @@ class PdfService {
                     pdfDoc.save();
                     // Top Left
                     pdfDoc.moveTo(0, 0).lineTo(120, 0).lineTo(0, 120).fill(colors.orange);
-                    // Bottom Right - Stay slightly away from absolute edge
+                    // Bottom Right
                     pdfDoc.moveTo(pw - 2, ph - 2).lineTo(pw - 120, ph - 2).lineTo(pw - 2, ph - 120).fill(colors.orange);
                     pdfDoc.moveTo(pw - 2, ph - 2).lineTo(pw - 80, ph - 2).lineTo(pw - 2, ph - 80).fill(colors.darkBlue);
                     pdfDoc.restore();
                 };
 
-                // Helper to check space and add page
-                const checkPage = (pdfDoc, neededHeight = 50) => {
-                    // Very permissive threshold
-                    if (pdfDoc.y + neededHeight > pdfDoc.page.height - 20) {
-                        pdfDoc.addPage({ margin: 0 });
-                        drawBackground(pdfDoc);
-                        pdfDoc.y = 50; 
-                        return true;
+                // Register Fonts with fallback
+                const registerFonts = () => {
+                    const fontFiles = [
+                        this.fonts.regular,
+                        this.fonts.linux_regular,
+                        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
+                    ];
+                    const boldFiles = [
+                        this.fonts.bold,
+                        this.fonts.linux_bold,
+                        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'
+                    ];
+
+                    let regularRegistered = false;
+                    for (const f of fontFiles) {
+                        if (fs.existsSync(f)) {
+                            doc.registerFont('Main', f);
+                            regularRegistered = true;
+                            break;
+                        }
                     }
-                    return false;
+                    if (!regularRegistered) doc.registerFont('Main', 'Helvetica');
+
+                    let boldRegistered = false;
+                    for (const f of boldFiles) {
+                        if (fs.existsSync(f)) {
+                            doc.registerFont('MainBold', f);
+                            boldRegistered = true;
+                            break;
+                        }
+                    }
+                    if (!boldRegistered) doc.registerFont('MainBold', 'Helvetica-Bold');
+
+                    doc.font('Main');
                 };
 
-                // Register Fonts
-                try {
-                    doc.registerFont('Main', this.fonts.regular);
-                    doc.registerFont('MainBold', this.fonts.bold);
-                    doc.font('Main');
-                } catch (e) {
-                    console.error('Font loading failed:', e.message);
-                }
-
+                registerFonts();
                 drawBackground(doc);
 
                 const pageWidth = doc.page.width;

@@ -115,87 +115,108 @@ class AssessmentService {
     }
 
     formatTextAssessmentResponse(assessment) {
-        const feedback = assessment.detailedFeedback;
-        const score = assessment.overallScore;
-        
-        let status = "🔴 (Rivojlanish kerak)";
-        if (score >= 80) status = "🟢 (Ajoyib!)";
-        else if (score >= 60) status = "🟡 (Yaxshi, lekin rivojlanish kerak)";
+        try {
+            const feedback = assessment.detailedFeedback || {};
+            const phoneticAnalysis = feedback.phoneticAnalysis || {};
+            const mispronouncedWords = phoneticAnalysis.mispronouncedWords || [];
+            const actionPlan = feedback.actionPlan || [];
+            const score = assessment.overallScore || 0;
+            
+            let status = "🔴 (Rivojlanish kerak)";
+            if (score >= 80) status = "🟢 (Ajoyib!)";
+            else if (score >= 60) status = "🟡 (Yaxshi, lekin rivojlanish kerak)";
 
-        let response = `📊 *Talaffuzingiz Tahlili Tayyor! Natija: ${score}% ${status}* \n\n`;
-        
-        if (assessment.ipa) {
-            response += `📖 *Matn Transkripsiyasi:* ${assessment.ipa}\n\n`;
-        }
+            let response = `📊 *Talaffuzingiz Tahlili Tayyor! Natija: ${score}% ${status}* \n\n`;
+            
+            if (assessment.ipa) {
+                response += `📖 *Matn Transkripsiyasi:* ${assessment.ipa}\n\n`;
+            }
 
-        response += `🔍 *Tahlil natijalari:* \n\n`;
+            response += `🔍 *Tahlil natijalari:* \n\n`;
 
-        // 1. Pronunciation Errors
-        if (feedback.phoneticAnalysis.mispronouncedWords && feedback.phoneticAnalysis.mispronouncedWords.length > 0) {
-            response += `⚠️ *1. Talaffuz xatosi:* \n`;
-            feedback.phoneticAnalysis.mispronouncedWords.slice(0, 3).forEach(m => {
-                response += `• *${m.word}* [${m.correctPronunciation}] — ${m.phoneticError}\n`;
-                if (m.improvementTip) response += `  └ To'g'rilash: ${m.improvementTip}\n`;
-            });
+            // 1. Pronunciation Errors
+            if (mispronouncedWords.length > 0) {
+                response += `⚠️ *1. Talaffuz xatosi:* \n`;
+                mispronouncedWords.slice(0, 3).forEach(m => {
+                    const word = m.word || "So'z";
+                    const correct = m.correctPronunciation || "";
+                    const error = m.phoneticError || "";
+                    response += `• *${word}* ${correct ? `[${correct}]` : ''} — ${error}\n`;
+                    if (m.improvementTip) response += `  └ To'g'rilash: ${m.improvementTip}\n`;
+                });
+                response += `\n`;
+            }
+
+            // 2. Stress
+            response += `⚖️ *2. Urg'u (Stress):* \n`;
+            if (phoneticAnalysis.prosodyFeedback) {
+                response += `${phoneticAnalysis.prosodyFeedback}\n`;
+            }
+            if (assessment.stressExample) {
+                response += `• *${assessment.stressExample}*\n`;
+            }
             response += `\n`;
+
+            // 3. Fluency
+            response += `🐢 *3. Ravonlik (Fluency):* \n`;
+            response += `Nutqingizda ravonlik ko'rsatkichi: *${assessment.fluencyScore || 0}%*.\n`;
+            const fluencyTips = actionPlan.filter(p => p.toLowerCase().includes('ravon') || p.toLowerCase().includes('bog\'lab'));
+            if (fluencyTips.length > 0) {
+                response += `• Maslahat: ${fluencyTips[0]}\n`;
+            }
+            response += `\n`;
+
+            // Recommendations
+            response += `💡 *Tavsiyalar:* \n`;
+            actionPlan.slice(0, 3).forEach(p => response += `✅ ${p}\n`);
+            response += `✅ Taqqoslash: Bot yuborgan audio bilan o'z ovozingizni solishtirib, xatolarni tahlil qiling. \n\n`;
+
+            response += `🚀 *Talaffuzni 100% ga chiqaring!* Kursimizda barcha tovushlar, urg'u qoidalari va ravon gapirish sirlari noldan o'rgatilgan. \n\n`;
+            
+            response += `🔗 *Batafsil:* [ https://t.me/+Pl610Bsw6YA4M2Ri ] \n`;
+
+            return response;
+        } catch (e) {
+            console.error('Format text response error:', e);
+            return `📊 *Talaffuz tahlili tayyor!* \nUmumiy natija: ${assessment.overallScore}%`;
         }
-
-        // 2. Stress
-        response += `⚖️ *2. Urg'u (Stress):* \n`;
-        if (feedback.phoneticAnalysis.prosodyFeedback) {
-            response += `${feedback.phoneticAnalysis.prosodyFeedback}\n`;
-        }
-        if (assessment.stressExample) {
-            response += `• *${assessment.stressExample}*\n`;
-        }
-        response += `\n`;
-
-        // 3. Fluency
-        response += `🐢 *3. Ravonlik (Fluency):* \n`;
-        response += `Nutqingizda ravonlik ko'rsatkichi: *${assessment.fluencyScore}%*.\n`;
-        const fluencyTips = feedback.actionPlan.filter(p => p.toLowerCase().includes('ravon') || p.toLowerCase().includes('bog\'lab'));
-        if (fluencyTips.length > 0) {
-            response += `• Maslahat: ${fluencyTips[0]}\n`;
-        }
-        response += `\n`;
-
-        // Recommendations
-        response += `💡 *Tavsiyalar:* \n`;
-        feedback.actionPlan.slice(0, 3).forEach(p => response += `✅ ${p}\n`);
-        response += `✅ Taqqoslash: Bot yuborgan audio bilan o'z ovozingizni solishtirib, xatolarni tahlil qiling. \n\n`;
-
-        response += `🚀 *Talaffuzni 100% ga chiqaring!* Kursimizda barcha tovushlar, urg'u qoidalari va ravon gapirish sirlari noldan o'rgatilgan. \n\n`;
-        
-        response += `🔗 *Batafsil:* [ https://t.me/+Pl610Bsw6YA4M2Ri ] \n`;
-
-        return response;
     }
 
     formatWordAssessmentResponse(assessment) {
-        const feedback = assessment.detailedFeedback;
-        const targetWord = assessment.targetText || assessment.transcription;
-        const ipa = assessment.ipa || ""; // We'll update Gemini to provide this
+        try {
+            const feedback = assessment.detailedFeedback || {};
+            const phoneticAnalysis = feedback.phoneticAnalysis || {};
+            const mispronouncedWords = phoneticAnalysis.mispronouncedWords || [];
+            const targetWord = assessment.targetText || assessment.transcription || "Noma'lum";
+            const ipa = assessment.ipa || ""; 
+            const score = assessment.overallScore || 0;
 
-        let response = `🌟 *Tahlil Tayyor!* \n\n`;
-        response += `📝 *So'z:* ${targetWord} ${ipa ? `[/${ipa}/]` : ''} 🎯 *Natija:* ${assessment.overallScore}% ✅ \n\n`;
+            let response = `🌟 *Tahlil Tayyor!* \n\n`;
+            response += `📝 *So'z:* ${targetWord} ${ipa ? `[/${ipa}/]` : ''} 🎯 *Natija:* ${score}% ✅ \n\n`;
 
-        if (feedback.phoneticAnalysis.mispronouncedWords && feedback.phoneticAnalysis.mispronouncedWords.length > 0) {
-            response += `❌ *Xatoliklar:* \n`;
-            feedback.phoneticAnalysis.mispronouncedWords.slice(0, 5).forEach(m => {
-                response += `• *"${m.word}"* — ${m.phoneticError}\n`;
-            });
-            response += `\n`;
-        } else {
-            response += `✅ *Xatoliklar aniqlanmadi. Ajoyib talaffuz!*\n\n`;
+            if (mispronouncedWords.length > 0) {
+                response += `❌ *Xatoliklar:* \n`;
+                mispronouncedWords.slice(0, 5).forEach(m => {
+                    const word = m.word || targetWord;
+                    const error = m.phoneticError || "Talaffuzda xatolik";
+                    response += `• *"${word}"* — ${error}\n`;
+                });
+                response += `\n`;
+            } else {
+                response += `✅ *Xatoliklar aniqlanmadi. Ajoyib talaffuz!*\n\n`;
+            }
+
+            response += `💡 *Maslahat:* O'z audiongizni bot audiosi bilan solishtiring va xato so'zni 5 marta qayta ayting. \n\n`;
+            
+            response += `🚀 *Talaffuzni 100% ga chiqaring!* Kursimizda barcha tovushlar va qoidalar noldan o'rgatilgan. \n\n`;
+            
+            response += `🔗 *Batafsil:* [ https://t.me/+Pl610Bsw6YA4M2Ri ] \n`;
+
+            return response;
+        } catch (e) {
+            console.error('Format word response error:', e);
+            return `🌟 *Tahlil tayyor!* \nNatija: ${assessment.overallScore}%`;
         }
-
-        response += `💡 *Maslahat:* O'z audiongizni bot audiosi bilan solishtiring va xato so'zni 5 marta qayta ayting. \n\n`;
-        
-        response += `🚀 *Talaffuzni 100% ga chiqaring!* Kursimizda barcha tovushlar va qoidalar noldan o'rgatilgan. \n\n`;
-        
-        response += `🔗 *Batafsil:* [ https://t.me/+Pl610Bsw6YA4M2Ri ] \n`;
-
-        return response;
     }
 
     async getLastAssessment(telegramId) {

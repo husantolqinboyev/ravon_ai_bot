@@ -567,22 +567,26 @@ class Database {
         return new Promise((resolve, reject) => {
             const query = `
                 INSERT INTO assessments 
-                (user_id, audio_duration, overall_score, accuracy_score, 
-                 fluency_score, completeness_score, prosody_score, transcription, feedback, english_level) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, type, audio_duration, overall_score, accuracy_score, 
+                 fluency_score, completeness_score, prosody_score, word_accuracy, 
+                 transcription, target_text, feedback, english_level) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
             
             this.db.run(query, [
                 userId,
+                assessmentData.type || 'general',
                 assessmentData.audioDuration,
-                assessmentData.overallScore,
-                assessmentData.accuracyScore,
-                assessmentData.fluencyScore,
-                assessmentData.completenessScore,
-                assessmentData.prosodyScore,
-                assessmentData.transcription,
-                assessmentData.feedback,
-                assessmentData.englishLevel
+                assessmentData.overallScore || 0,
+                assessmentData.accuracyScore || 0,
+                assessmentData.fluencyScore || 0,
+                assessmentData.completenessScore || 0,
+                assessmentData.prosodyScore || 0,
+                assessmentData.wordAccuracy || 0,
+                assessmentData.transcription || '',
+                assessmentData.target_text || '',
+                assessmentData.feedback || '',
+                assessmentData.englishLevel || ''
             ], function(err) {
                 if (err) reject(err);
                 else resolve(this.lastID);
