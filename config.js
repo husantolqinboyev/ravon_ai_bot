@@ -11,7 +11,7 @@ module.exports = {
     GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
 
     // Admin Settings
-    ADMIN_ID: process.env.ADMIN_ID,
+    ADMIN_IDS: process.env.ADMIN_ID ? process.env.ADMIN_ID.split(',').map(id => id.trim()) : [],
 
     // Channel Subscription Check
     REQUIRED_CHANNEL_ID: '-1003014655042',

@@ -159,8 +159,8 @@ class Database {
     }
 
     async isAdmin(telegramId) {
-        // First check .env ADMIN_ID
-        if (config.ADMIN_ID && String(telegramId) === String(config.ADMIN_ID)) {
+        // First check .env ADMIN_ID list
+        if (config.ADMIN_IDS && config.ADMIN_IDS.includes(String(telegramId))) {
             return true;
         }
         return new Promise((resolve, reject) => {

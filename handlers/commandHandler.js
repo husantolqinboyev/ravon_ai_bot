@@ -42,7 +42,7 @@ class CommandHandler {
         
         // Auto-set first user as admin if no admin exists and no ADMIN_ID in .env
         const adminCount = await database.getAdminCount();
-        if (adminCount === 0 && !config.ADMIN_ID) {
+        if (adminCount === 0 && (!config.ADMIN_IDS || config.ADMIN_IDS.length === 0)) {
             await database.setAdmin(ctx.from.id, true);
         }
 
