@@ -19,7 +19,8 @@ class CommandHandler {
             ['📚 Matnlar ro\'yxati', '📋 Oxirgi natijalar'],
             ['📊 Umumiy statistika', '👨‍🏫 O\'qituvchilar'],
             ['💳 Karta sozlamalari', '💰 Tariflar'],
-            ['📩 To\'lov so\'rovlari', '🔙 Asosiy menyu']
+            ['📩 To\'lov so\'rovlari', '📢 E\'lon berish'],
+            ['🔙 Asosiy menyu']
         ]).resize();
 
         this.teacherMenu = Markup.keyboard([
@@ -324,18 +325,73 @@ class CommandHandler {
         const inlineKeyboard = [];
         
         users.slice(0, 15).forEach(u => {
-            msg += `• ${u.first_name} (@${u.username || 'yo\'q'}) - ID: \`${u.telegram_id}\`\n`;
+            const firstName = (u.first_name || 'Foydalanuvchi').replace(/[_*`\[\]()]/g, '\\$&');
+            const username = u.username ? `(@${u.username.replace(/[_*`\[\]()]/g, '\\$&')})` : "(yo'q)";
+            msg += `• ${firstName} ${username} - ID: \`${u.telegram_id}\`\n`;
             inlineKeyboard.push([Markup.button.callback(`👤 ${u.first_name} ni boshqarish`, `manage_user_${u.telegram_id}`)]);
         });
 
+        if (users.length === 0) {
+            msg = " Foydalanuvchilar topilmadi.";
+        }
+
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(inlineKeyboard) });
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(inlineKeyboard) }).catch(e => {
+                console.error('Error editing message in handleUsers:', e);
+                ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(inlineKeyboard));
+            });
             try {
                 await ctx.answerCbQuery();
             } catch (e) {}
         } else {
-            await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(inlineKeyboard));
+            await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(inlineKeyboard)).catch(e => {
+                console.error('Error replying in handleUsers:', e);
+                ctx.reply(msg.replace(/[*_`]/g, ''));
+            });
         }
+    }
+
+    async handleBroadcastRequest(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        ctx.session.state = 'waiting_for_broadcast_message';
+        await ctx.reply('📢 Barcha foydalanuvchilarga yuboriladigan xabarni yuboring.\n\nSiz matn, rasm, video yoki audio yuborishingiz mumkin. Media xabarlarning tagidagi izohi (caption) ham birga yuboriladi.', Markup.keyboard([['❌ Bekor qilish']]).resize());
+    }
+
+    async handleBroadcast(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        const messageText = ctx.message.text || ctx.message.caption || '';
+
+        if (messageText === '❌ Bekor qilish') {
+            ctx.session.state = null;
+            return ctx.reply('Bekor qilindi.', this.adminMenu);
+        }
+
+        const users = await database.getAllUsers();
+        await ctx.reply(`Xabar ${users.length} ta foydalanuvchiga yuborilmoqda...`);
+        
+        ctx.session.state = null;
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const user of users) {
+            try {
+                // copyMessage copies the original message with all its properties (caption, entities, etc.)
+                await ctx.telegram.copyMessage(user.telegram_id, ctx.chat.id, ctx.message.message_id);
+                successCount++;
+                // Add small delay to avoid hitting rate limits (30 messages per second is Telegram's limit)
+                await new Promise(resolve => setTimeout(resolve, 50));
+            } catch (error) {
+                console.error(`Broadcast failed for ${user.telegram_id}:`, error.message);
+                // If user blocked the bot, we could potentially deactivate them in DB here
+                failCount++;
+            }
+        }
+
+        await ctx.reply(`✅ E'lon yakunlandi!\n\n Muvaffaqiyatli: ${successCount}\n Xatolik: ${failCount}`, this.adminMenu);
     }
 
     async handleManageUser(ctx) {
@@ -360,7 +416,7 @@ class CommandHandler {
 
         const buttons = [
             [Markup.button.callback(isTeacher ? '❌ O\'qituvchilikdan olish' : '👨‍🏫 O\'qituvchi etib tayinlash', `toggle_teacher_${targetId}_${isTeacher ? 0 : 1}`)],
-            [Markup.button.callback('➕ Limit qo\'shish (+10)', `add_limit_${targetId}_10`)],
+            [Markup.button.callback('➕ Limit qo\'shish (+3)', `add_limit_${targetId}_3`)],
             [Markup.button.callback('🔙 Orqaga', 'admin_users_list')]
         ];
 

@@ -22,6 +22,11 @@ bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
     if (!userId) return next();
 
+    // Handle Broadcast state first
+    if (ctx.session?.state === 'waiting_for_broadcast_message' && (ctx.message || ctx.editedMessage)) {
+        return commandHandler.handleBroadcast(ctx);
+    }
+
     // Skip check for Admin
     const isAdmin = await database.isAdmin(userId);
     if (isAdmin) return next();
@@ -102,6 +107,7 @@ bot.hears('👨‍🏫 O\'qituvchilar', (ctx) => commandHandler.handleTeachers(c
 bot.hears('💳 Karta sozlamalari', (ctx) => commandHandler.handleCardSettings(ctx));
 bot.hears('💰 Tariflar', (ctx) => commandHandler.handleTariffSettings(ctx));
 bot.hears('📩 To\'lov so\'rovlari', (ctx) => commandHandler.handlePaymentRequests(ctx));
+bot.hears('📢 E\'lon berish', (ctx) => commandHandler.handleBroadcastRequest(ctx));
 
 // Admin commands with arguments
 bot.command('setcard', (ctx) => commandHandler.handleSetCard(ctx));
@@ -193,6 +199,15 @@ bot.catch((err, ctx) => {
 
 // Start bot with retry logic
 const startBot = async (retries = 5) => {
+    // Start dummy HTTP server for Render before launching bot
+    const PORT = process.env.PORT || 3000;
+    http.createServer((req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('Bot is running\n');
+    }).listen(PORT, '0.0.0.0', () => {
+        console.log(`📡 Health check server listening on port ${PORT}`);
+    });
+
     for (let i = 0; i < retries; i++) {
         try {
             console.log(`🚀 Starting Preimum English AI bot... (Attempt ${i + 1}/${retries})`);
@@ -214,15 +229,6 @@ const startBot = async (retries = 5) => {
 };
 
 startBot();
-
-// Dummy HTTP server to satisfy Render's port check
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot is running\n');
-}).listen(PORT, '0.0.0.0', () => {
-    console.log(`📡 Health check server listening on port ${PORT}`);
-});
 
 // Keep-alive mechanism for Render free tier
 const RENDER_URL = 'https://ravon-ai-bot.onrender.com';

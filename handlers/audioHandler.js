@@ -176,7 +176,9 @@ class AudioHandler {
                 const referralLink = `https://t.me/${botUsername}?start=${userId}`;
                 
                 const msg = "⚠️ *Kunlik limitingiz tugagan!*\n\n" +
-                    "Bonus limitlar to'plash uchun do'stlaringizni taklif qiling:\n" +
+                    "Xavotir olmang, limitingizni osongina oshirishingiz mumkin. " +
+                    "Har 3 ta taklif qilingan do'stingiz uchun sizga *+3 ta bonus limit* beriladi!\n\n" +
+                    "🔗 *Sizning referal havolangiz:*\n" +
                     `\`${referralLink}\``;
                 
                 return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([

@@ -27,7 +27,7 @@ class Database {
                 is_teacher INTEGER DEFAULT 0,
                 is_premium INTEGER DEFAULT 0,
                 premium_until DATETIME,
-                daily_limit INTEGER DEFAULT 10,
+                daily_limit INTEGER DEFAULT 3,
                 used_today INTEGER DEFAULT 0,
                 bonus_limit INTEGER DEFAULT 0,
                 tts_voice TEXT DEFAULT 'en-US-AriaNeural',
@@ -90,42 +90,44 @@ class Database {
             )`
         ];
 
-        // Column check and migration
         const migrationQueries = [
-            // Users table columns
             { table: 'users', column: 'is_premium', type: 'INTEGER DEFAULT 0' },
             { table: 'users', column: 'premium_until', type: 'DATETIME' },
             { table: 'users', column: 'is_admin', type: 'INTEGER DEFAULT 0' },
             { table: 'users', column: 'is_teacher', type: 'INTEGER DEFAULT 0' },
-            { table: 'users', column: 'daily_limit', type: 'INTEGER DEFAULT 10' },
+            { table: 'users', column: 'daily_limit', type: 'INTEGER DEFAULT 3' },
             { table: 'users', column: 'used_today', type: 'INTEGER DEFAULT 0' },
             { table: 'users', column: 'bonus_limit', type: 'INTEGER DEFAULT 0' },
             { table: 'users', column: 'tts_voice', type: "TEXT DEFAULT 'en-US-AriaNeural'" },
             { table: 'users', column: 'last_active', type: 'DATETIME DEFAULT CURRENT_TIMESTAMP' },
             { table: 'users', column: 'referred_by', type: 'INTEGER' },
             { table: 'users', column: 'referral_count', type: 'INTEGER DEFAULT 0' },
-            // Assessments table columns
             { table: 'assessments', column: 'type', type: 'TEXT' },
             { table: 'assessments', column: 'word_accuracy', type: 'REAL' },
             { table: 'assessments', column: 'target_text', type: 'TEXT' }
         ];
 
-        // 1. Create tables
-        tableQueries.forEach(query => {
-            this.db.run(query, (err) => {
-                if (err) console.error('Table creation error:', err);
+        this.db.serialize(() => {
+            // 1. Create tables sequentially
+            tableQueries.forEach(query => {
+                this.db.run(query, (err) => {
+                    if (err) console.error('Table creation error:', err);
+                });
             });
-        });
 
-        // 2. Add missing columns
-        migrationQueries.forEach(m => {
-            this.db.run(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`, (err) => {
-                // Ignore error if column already exists
-                if (err && !err.message.includes('duplicate column name')) {
-                    // We don't log "duplicate column" errors to keep console clean
-                    // but we can log other migration errors if needed
-                }
-            });
+            // 2. Add missing columns sequentially
+             migrationQueries.forEach(m => {
+                 this.db.run(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`, (err) => {
+                     if (err && !err.message.includes('duplicate column name')) {
+                         console.error(`Migration error (${m.table}.${m.column}):`, err.message);
+                     }
+                 });
+             });
+             
+             // 3. Update existing limits (one-time reduction)
+             this.db.run('UPDATE users SET daily_limit = 3 WHERE daily_limit = 10 AND is_premium = 0');
+             
+             console.log('Database tables and migrations initialized');
         });
     }
 
@@ -133,7 +135,7 @@ class Database {
         return new Promise((resolve, reject) => {
             this.db.get('SELECT used_today, daily_limit, bonus_limit FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
                 if (err) reject(err);
-                else resolve(row || { used_today: 0, daily_limit: 10, bonus_limit: 0 });
+                else resolve(row || { used_today: 0, daily_limit: 3, bonus_limit: 0 });
             });
         });
     }
@@ -415,7 +417,7 @@ class Database {
         return new Promise((resolve, reject) => {
             this.db.get('SELECT referral_count, daily_limit, bonus_limit FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
                 if (err) reject(err);
-                else resolve(row || { referral_count: 0, daily_limit: 10, bonus_limit: 0 });
+                else resolve(row || { referral_count: 0, daily_limit: 3, bonus_limit: 0 });
             });
         });
     }
@@ -544,8 +546,8 @@ class Database {
                     const until = new Date(row.premium_until);
                     if (until < new Date()) {
                         // Premium expired
-                        this.db.run('UPDATE users SET is_premium = 0, daily_limit = 10 WHERE telegram_id = ?', [telegramId]);
-                        resolve(false);
+                            this.db.run('UPDATE users SET is_premium = 0, daily_limit = 3 WHERE telegram_id = ?', [telegramId]);
+                            resolve(false);
                     } else {
                         resolve(true);
                     }
