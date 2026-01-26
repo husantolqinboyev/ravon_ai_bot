@@ -66,7 +66,15 @@ class CommandHandler {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        await ctx.reply('👨‍💼 Admin panelga xush kelibsiz!', this.adminMenu);
+        const msg = '👨‍💼 Admin panelga xush kelibsiz!';
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(msg, this.adminMenu).catch(() => {
+                ctx.reply(msg, this.adminMenu);
+            });
+            await ctx.answerCbQuery();
+        } else {
+            await ctx.reply(msg, this.adminMenu);
+        }
     }
 
     async handleTeacher(ctx) {
@@ -603,7 +611,14 @@ class CommandHandler {
         msg += `3. To'lov chekini (rasm) va ma'lumotlaringizni botga yuboring.\n`;
         msg += `4. Admin tasdiqlaganidan so'ng Premium faollashadi.`;
 
-        await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(buttons));
+        const keyboard = Markup.inlineKeyboard(buttons);
+        
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(() => {});
+            await ctx.answerCbQuery();
+        } else {
+            await ctx.replyWithMarkdown(msg, keyboard);
+        }
     }
 
     async handleSelectTariff(ctx) {
@@ -627,75 +642,135 @@ class CommandHandler {
 
     // --- Admin Settings ---
     async handleCardSettings(ctx) {
+        try {
+            const isAdmin = await database.isAdmin(ctx.from.id);
+            if (!isAdmin) return;
+
+            const cardNum = await database.getSetting('card_number');
+            const cardHolder = await database.getSetting('card_holder');
+
+            let msg = `💳 *Karta Sozlamalari*\n\n`;
+            msg += `Hozirgi karta: \`${cardNum || 'yo\'q'}\`\n`;
+            msg += `Karta egasi: \`${cardHolder || 'yo\'q'}\`\n\n`;
+            msg += `O'zgartirish uchun quyidagi tugmani bosing:`;
+
+            const buttons = [
+                [Markup.button.callback('✏️ Kartani o\'zgartirish', 'admin_set_card')],
+                [Markup.button.callback('🔙 Orqaga', 'admin_panel_main')]
+            ];
+
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => {});
+            } else {
+                await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(buttons));
+            }
+        } catch (error) {
+            console.error('Error in handleCardSettings:', error);
+            await ctx.reply('Xatolik yuz berdi.');
+        }
+    }
+
+    async handleSetCardRequest(ctx) {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        const cardNum = await database.getSetting('card_number');
-        const cardHolder = await database.getSetting('card_holder');
-
-        let msg = `💳 *Karta Sozlamalari*\n\n`;
-        msg += `Hozirgi karta: \`${cardNum || 'yo\'q'}\`\n`;
-        msg += `Karta egasi: \`${cardHolder || 'yo\'q'}\`\n\n`;
-        msg += `O'zgartirish uchun quyidagi formatda yuboring:\n`;
-        msg += `\`/setcard_KARTARAKAM_ISM_FAMILYA\``;
-
-        await ctx.replyWithMarkdown(msg);
+        ctx.session.state = 'waiting_for_card_info';
+        await ctx.reply('💳 Yangi karta ma\'lumotlarini quyidagi formatda yuboring:\n\n`KARTA_RAKAMI KARTA_EGASI`\n\nMisol: `8600123456789012 Eshmat Toshmatov`\n\nBekor qilish uchun /cancel deb yozing.', { parse_mode: 'Markdown' });
+        if (ctx.callbackQuery) await ctx.answerCbQuery();
     }
 
     async handleSetCard(ctx) {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        const parts = ctx.message.text.split('_');
-        if (parts.length < 3) return ctx.reply("Format xato. Misol: /setcard_8600123412341234_Eshmat_Toshmatov");
+        const text = ctx.message.text;
+        if (text === '/cancel') {
+            ctx.session.state = null;
+            return ctx.reply('Bekor qilindi.', this.adminMenu);
+        }
 
-        const cardNum = parts[1];
-        const cardHolder = parts.slice(2).join(' ');
+        const parts = text.split(' ');
+        if (parts.length < 2) return ctx.reply("❌ Format noto'g'ri. Iltimos, karta raqami va egasini yozing. Misol: `8600123456789012 Eshmat Toshmatov`", { parse_mode: 'Markdown' });
+
+        const cardNum = parts[0];
+        const cardHolder = parts.slice(1).join(' ');
 
         await database.setSetting('card_number', cardNum);
         await database.setSetting('card_holder', cardHolder);
 
-        await ctx.reply(`✅ Karta muvaffaqiyatli saqlandi:\nKarta: ${cardNum}\nEga: ${cardHolder}`);
+        ctx.session.state = null;
+        await ctx.reply(`✅ Karta muvaffaqiyatli saqlandi:\n\n💳 Karta: \`${cardNum}\`\n👤 Ega: \`${cardHolder}\``, { parse_mode: 'Markdown', ...this.adminMenu });
     }
 
     async handleTariffSettings(ctx) {
+        try {
+            const isAdmin = await database.isAdmin(ctx.from.id);
+            if (!isAdmin) return;
+
+            const tariffs = await database.getTariffs();
+
+            let msg = `💰 *Tariflar Sozlamalari*\n\n`;
+            const buttons = [];
+
+            if (tariffs.length === 0) {
+                msg += "_Hozircha tariflar yo'q._\n";
+            } else {
+                tariffs.forEach(t => {
+                    msg += `• *${t.name}*: ${t.price.toLocaleString()} so'm / ${t.duration_days} kun (${t.limit_per_day} ta/kun)\n`;
+                    buttons.push([Markup.button.callback(`❌ O'chirish: ${t.name}`, `delete_tariff_${t.id}`)]);
+                });
+            }
+
+            msg += `\nYangisini qo'shish uchun tugmani bosing:`;
+            buttons.push([Markup.button.callback('➕ Yangi tarif qo\'shish', 'admin_add_tariff')]);
+            buttons.push([Markup.button.callback('🔙 Orqaga', 'admin_panel_main')]);
+
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => {});
+                await ctx.answerCbQuery();
+            } else {
+                await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(buttons));
+            }
+        } catch (error) {
+            console.error('Error in handleTariffSettings:', error);
+            await ctx.reply('Xatolik yuz berdi.');
+        }
+    }
+
+    async handleAddTariffRequest(ctx) {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        const tariffs = await database.getTariffs();
-
-        let msg = `💰 *Tariflar Sozlamalari*\n\n`;
-        const buttons = [];
-
-        tariffs.forEach(t => {
-            msg += `• *${t.name}*: ${t.price} so'm / ${t.duration_days} kun (${t.limit_per_day} ta/kun)\n`;
-            buttons.push([Markup.button.callback(`❌ O'chirish: ${t.name}`, `delete_tariff_${t.id}`)]);
-        });
-
-        msg += `\nYangisini qo'shish uchun format:\n`;
-        msg += `\`/addtariff_NOM_NARX_KUN_LIMIT\``;
-
-        if (buttons.length > 0) {
-            await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(buttons));
-        } else {
-            await ctx.replyWithMarkdown(msg);
-        }
+        ctx.session.state = 'waiting_for_tariff_info';
+        await ctx.reply('💰 Yangi tarif ma\'lumotlarini quyidagi formatda yuboring:\n\n`NOM NARX KUN LIMIT`\n\nMisol: `Premium 50000 30 50`\n\nBekor qilish uchun /cancel deb yozing.', { parse_mode: 'Markdown' });
+        if (ctx.callbackQuery) await ctx.answerCbQuery();
     }
 
     async handleAddTariff(ctx) {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        const parts = ctx.message.text.split('_');
-        if (parts.length < 5) return ctx.reply("Format xato. Misol: /addtariff_Standard_50000_30_50");
+        const text = ctx.message.text;
+        if (text === '/cancel') {
+            ctx.session.state = null;
+            return ctx.reply('Bekor qilindi.', this.adminMenu);
+        }
 
-        const name = parts[1];
-        const price = parseInt(parts[2]);
-        const duration = parseInt(parts[3]);
-        const limit = parseInt(parts[4]);
+        const parts = text.split(' ');
+        if (parts.length < 4) return ctx.reply("❌ Format noto'g'ri. Misol: `Standard 50000 30 50`", { parse_mode: 'Markdown' });
+
+        const name = parts[0];
+        const price = parseInt(parts[1]);
+        const duration = parseInt(parts[2]);
+        const limit = parseInt(parts[3]);
+
+        if (isNaN(price) || isNaN(duration) || isNaN(limit)) {
+            return ctx.reply("❌ Narx, kun va limit son bo'lishi kerak.");
+        }
 
         await database.addTariff(name, price, duration, limit);
-        await ctx.reply(`✅ Yangi tarif qo'shildi: ${name}`);
+        ctx.session.state = null;
+        await ctx.reply(`✅ Yangi tarif qo'shildi: *${name}*`, { parse_mode: 'Markdown', ...this.adminMenu });
     }
 
     async handleDeleteTariff(ctx) {

@@ -114,6 +114,9 @@ bot.command('setcard', (ctx) => commandHandler.handleSetCard(ctx));
 bot.command('addtariff', (ctx) => commandHandler.handleAddTariff(ctx));
 
 // Action handlers
+bot.action('admin_set_card', (ctx) => commandHandler.handleSetCardRequest(ctx));
+bot.action('admin_add_tariff', (ctx) => commandHandler.handleAddTariffRequest(ctx));
+bot.action('admin_panel_main', (ctx) => commandHandler.handleAdmin(ctx));
 bot.action(/select_tariff_(.+)/, (ctx) => commandHandler.handleSelectTariff(ctx));
 bot.action(/delete_tariff_(.+)/, (ctx) => commandHandler.handleDeleteTariff(ctx));
 bot.action(/approve_payment_(.+)/, (ctx) => commandHandler.handleApprovePayment(ctx));
@@ -144,6 +147,14 @@ bot.on(['audio', 'voice'], (ctx) => audioHandler.handleAudio(ctx));
 bot.on('text', async (ctx, next) => {
     if (ctx.session?.state === 'waiting_for_text_for_pronunciation') {
         return commandHandler.processTextForPronunciation(ctx);
+    }
+
+    if (ctx.session?.state === 'waiting_for_card_info') {
+        return commandHandler.handleSetCard(ctx);
+    }
+
+    if (ctx.session?.state === 'waiting_for_tariff_info') {
+        return commandHandler.handleAddTariff(ctx);
     }
     
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
