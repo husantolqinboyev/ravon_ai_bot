@@ -1,5 +1,6 @@
 const { Telegraf, session, Markup } = require('telegraf');
 const http = require('http');
+const https = require('https');
 const config = require('./config');
 const commandHandler = require('./handlers/commandHandler');
 const audioHandler = require('./handlers/audioHandler');
@@ -222,6 +223,16 @@ http.createServer((req, res) => {
 }).listen(PORT, '0.0.0.0', () => {
     console.log(`📡 Health check server listening on port ${PORT}`);
 });
+
+// Keep-alive mechanism for Render free tier
+const RENDER_URL = 'https://ravon-ai-bot.onrender.com';
+setInterval(() => {
+    https.get(RENDER_URL, (res) => {
+        console.log(`ping: ${RENDER_URL} - Status: ${res.statusCode}`);
+    }).on('error', (err) => {
+        console.error(`ping error: ${err.message}`);
+    });
+}, 10 * 60 * 1000); // Every 10 minutes (600,000 ms)
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
