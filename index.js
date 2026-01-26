@@ -224,6 +224,42 @@ bot.catch((err, ctx) => {
     ctx.reply("Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.");
 });
 
+// Update bot description with user count
+const updateBotDescription = async () => {
+    try {
+        const monthlyUsers = await database.getMonthlyUsers();
+        const totalUsers = await database.getTotalUserCount();
+        
+        // Get admin list to check if current user is admin
+        const admins = await database.getAdmins();
+        const adminIds = admins.map(admin => admin.telegram_id);
+        
+        // For public users - show impressive numbers
+        let displayUsers, userLabel;
+        if (monthlyUsers > 100) {
+            // Multiply monthly users for impressive display
+            displayUsers = Math.floor(monthlyUsers * 2.5); // Multiply by 2.5
+            userLabel = 'oylik';
+        } else {
+            // Multiply total users for impressive display
+            displayUsers = Math.floor(totalUsers * 1.8); // Multiply by 1.8
+            userLabel = 'jami';
+        }
+        
+        const publicDescription = `${displayUsers.toLocaleString()} ${userLabel} foydalanuvchi`;
+        
+        // Update bot description for public
+        await bot.telegram.setMyDescription(publicDescription);
+        console.log(`Bot description updated (public): ${publicDescription}`);
+        
+        // Log real numbers for admin reference
+        console.log(`Real stats - Monthly: ${monthlyUsers}, Total: ${totalUsers}`);
+        
+    } catch (error) {
+        console.error('Error updating bot description:', error);
+    }
+};
+
 // Start bot with retry logic
 const startBot = async (retries = 5) => {
     // Start dummy HTTP server for Render before launching bot
@@ -256,6 +292,10 @@ const startBot = async (retries = 5) => {
 };
 
 startBot();
+
+// Update bot description periodically
+updateBotDescription(); // Update immediately on start
+setInterval(updateBotDescription, 5 * 60 * 1000); // Update every 5 minutes
 
 // Keep-alive mechanism for Render free tier
 const RENDER_URL = 'https://ravon-ai-bot.onrender.com';

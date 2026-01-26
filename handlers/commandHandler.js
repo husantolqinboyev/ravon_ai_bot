@@ -53,13 +53,25 @@ class CommandHandler {
         const monthlyUsers = await database.getMonthlyUsers();
         const totalUsers = await database.getTotalUserCount();
         
-        // Show more impressive number if monthly users are low
-        const displayUsers = monthlyUsers > 100 ? monthlyUsers : totalUsers;
-        const userLabel = monthlyUsers > 100 ? 'oylik foydalanuvchi' : 'jami foydalanuvchi';
+        let displayUsers, userLabel;
+        if (isAdmin) {
+            // Admins see real numbers
+            displayUsers = monthlyUsers > 100 ? monthlyUsers : totalUsers;
+            userLabel = monthlyUsers > 100 ? 'oylik' : 'jami';
+        } else {
+            // Public users see impressive multiplied numbers
+            if (monthlyUsers > 100) {
+                displayUsers = Math.floor(monthlyUsers * 2.5); // Multiply by 2.5
+                userLabel = 'oylik';
+            } else {
+                displayUsers = Math.floor(totalUsers * 1.8); // Multiply by 1.8
+                userLabel = 'jami';
+            }
+        }
         
         let welcomeMessage = `Assalomu alaykum! 👋\n\n` +
             `Men **Ravon AI** - sizning ingliz tili talaffuzingizni baholashga yordam beruvchi botman.\n` +
-            `👥 ${displayUsers.toLocaleString()} ${userLabel}\n\n` +
+            `👥 ${displayUsers.toLocaleString()} ${userLabel} foydalanuvchi\n\n` +
             `Quyidagi bo'limlardan birini tanlang:`;
         
         if (isAdmin) {
