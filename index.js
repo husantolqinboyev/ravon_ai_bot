@@ -118,6 +118,9 @@ bot.action(/select_tariff_(.+)/, (ctx) => commandHandler.handleSelectTariff(ctx)
 bot.action(/delete_tariff_(.+)/, (ctx) => commandHandler.handleDeleteTariff(ctx));
 bot.action(/approve_payment_(.+)/, (ctx) => commandHandler.handleApprovePayment(ctx));
 bot.action(/reject_payment_(.+)/, (ctx) => commandHandler.handleRejectPayment(ctx));
+bot.action(/manage_user_(.+)/, (ctx) => commandHandler.handleManageUser(ctx));
+bot.action(/toggle_teacher_(\d+)_(0|1)/, (ctx) => commandHandler.handleToggleTeacher(ctx));
+bot.action(/add_limit_(\d+)_(\d+)/, (ctx) => commandHandler.handleAddLimit(ctx));
 bot.action('admin_users_list', (ctx) => commandHandler.handleUsers(ctx));
 bot.action('show_referral_info', (ctx) => commandHandler.handleReferral(ctx));
 

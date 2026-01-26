@@ -395,70 +395,82 @@ class CommandHandler {
     }
 
     async handleManageUser(ctx) {
-        const isAdmin = await database.isAdmin(ctx.from.id);
-        if (!isAdmin) return;
-
-        const targetId = ctx.match[1];
-        const user = await new Promise((resolve) => {
-            database.db.get('SELECT * FROM users WHERE telegram_id = ?', [targetId], (err, row) => resolve(row));
-        });
-
-        if (!user) {
-            return ctx.answerCbQuery('Foydalanuvchi topilmadi.', { show_alert: true });
-        }
-
-        const isTeacher = user.is_teacher === 1;
-        const msg = `👤 *Foydalanuvchini boshqarish:*\n\n` +
-            `Ism: ${user.first_name}\n` +
-            `ID: \`${user.telegram_id}\`\n` +
-            `Rol: ${user.is_admin ? 'Admin' : (isTeacher ? 'O\'qituvchi' : 'Talaba')}\n` +
-            `Limit: ${user.daily_limit}`;
-
-        const buttons = [
-            [Markup.button.callback(isTeacher ? '❌ O\'qituvchilikdan olish' : '👨‍🏫 O\'qituvchi etib tayinlash', `toggle_teacher_${targetId}_${isTeacher ? 0 : 1}`)],
-            [Markup.button.callback('➕ Limit qo\'shish (+3)', `add_limit_${targetId}_3`)],
-            [Markup.button.callback('🔙 Orqaga', 'admin_users_list')]
-        ];
-
-        await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
-        
         try {
-            await ctx.answerCbQuery();
-        } catch (e) {
-            // Callback might already be answered
+            const isAdmin = await database.isAdmin(ctx.from.id);
+            if (!isAdmin) return;
+
+            const targetId = ctx.match[1];
+            const user = await database.getUserByTelegramId(targetId);
+
+            if (!user) {
+                return ctx.answerCbQuery('Foydalanuvchi topilmadi.', { show_alert: true });
+            }
+
+            const isTeacher = user.is_teacher === 1;
+            const firstName = (user.first_name || 'Foydalanuvchi').replace(/[_*`\[\]()]/g, '\\$&');
+            
+            const msg = `👤 *Foydalanuvchini boshqarish:*\n\n` +
+                `Ism: ${firstName}\n` +
+                `ID: \`${user.telegram_id}\`\n` +
+                `Rol: ${user.is_admin ? 'Admin' : (isTeacher ? 'O\'qituvchi' : 'Talaba')}\n` +
+                `Limit: ${user.daily_limit}`;
+
+            const buttons = [
+                [Markup.button.callback(isTeacher ? '❌ O\'qituvchilikdan olish' : '👨‍🏫 O\'qituvchi etib tayinlash', `toggle_teacher_${targetId}_${isTeacher ? 0 : 1}`)],
+                [Markup.button.callback('➕ Limit qo\'shish (+3)', `add_limit_${targetId}_3`)],
+                [Markup.button.callback('🔙 Orqaga', 'admin_users_list')]
+            ];
+
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(async (e) => {
+                console.error('Error editing message in handleManageUser:', e);
+                await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(buttons));
+            });
+            
+            await ctx.answerCbQuery().catch(() => {});
+        } catch (error) {
+            console.error('Error in handleManageUser:', error);
+            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => {});
         }
     }
 
     async handleToggleTeacher(ctx) {
-        const isAdmin = await database.isAdmin(ctx.from.id);
-        if (!isAdmin) return;
+        try {
+            const isAdmin = await database.isAdmin(ctx.from.id);
+            if (!isAdmin) return;
 
-        const [_, targetId, status] = ctx.match;
-        const isTeacher = status === '1';
+            const [_, targetId, status] = ctx.match;
+            const isTeacher = status === '1';
 
-        await database.setTeacher(targetId, isTeacher);
-        
-        await ctx.answerCbQuery(isTeacher ? 'O\'qituvchi etib tayinlandi!' : 'O\'qituvchilikdan olindi!');
-        return this.handleManageUser(ctx);
+            await database.setTeacher(targetId, isTeacher);
+            
+            await ctx.answerCbQuery(isTeacher ? 'O\'qituvchi etib tayinlandi!' : 'O\'qituvchilikdan olindi!');
+            return this.handleManageUser(ctx);
+        } catch (error) {
+            console.error('Error in handleToggleTeacher:', error);
+            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => {});
+        }
     }
 
     async handleAddLimit(ctx) {
-        const isAdmin = await database.isAdmin(ctx.from.id);
-        if (!isAdmin) return;
+        try {
+            const isAdmin = await database.isAdmin(ctx.from.id);
+            if (!isAdmin) return;
 
-        const [_, targetId, amount] = ctx.match;
-        
-        const user = await new Promise((resolve) => {
-            database.db.get('SELECT daily_limit FROM users WHERE telegram_id = ?', [targetId], (err, row) => resolve(row));
-        });
+            const [_, targetId, amount] = ctx.match;
+            
+            const user = await database.getUserByTelegramId(targetId);
 
-        if (user) {
-            const newLimit = user.daily_limit + parseInt(amount);
-            await database.updateUserLimit(targetId, newLimit);
-            await ctx.answerCbQuery(`Limit ${newLimit} ga oshirildi!`);
-            return this.handleManageUser(ctx);
+            if (user) {
+                const newLimit = user.daily_limit + parseInt(amount);
+                await database.updateUserLimit(targetId, newLimit);
+                await ctx.answerCbQuery(`Limit ${newLimit} ga oshirildi!`);
+                return this.handleManageUser(ctx);
+            }
+            await ctx.answerCbQuery('Foydalanuvchi topilmadi.', { show_alert: true });
+        } catch (error) {
+            console.error('Error in handleAddLimit:', error);
+            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => {});
         }
-        await ctx.answerCbQuery('Xatolik yuz berdi.');
     }
 
     async handleAddTestWord(ctx) {
