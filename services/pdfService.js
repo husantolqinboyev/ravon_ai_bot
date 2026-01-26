@@ -87,6 +87,9 @@ class PdfService {
                     pdfDoc.restore();
                 };
 
+                let mainFont = 'Helvetica';
+                let boldFont = 'Helvetica-Bold';
+
                 // Register Fonts with fallback
                 const registerFonts = () => {
                     const fontFiles = [
@@ -103,24 +106,44 @@ class PdfService {
                     let regularRegistered = false;
                     for (const f of fontFiles) {
                         if (fs.existsSync(f)) {
-                            doc.registerFont('Main', f);
-                            regularRegistered = true;
-                            break;
+                            try {
+                                doc.registerFont('Main', f);
+                                regularRegistered = true;
+                                mainFont = 'Main';
+                                break;
+                            } catch (e) {
+                                console.error(`Error registering font ${f}:`, e);
+                            }
                         }
                     }
-                    if (!regularRegistered) doc.registerFont('Main', 'Helvetica');
 
                     let boldRegistered = false;
                     for (const f of boldFiles) {
                         if (fs.existsSync(f)) {
-                            doc.registerFont('MainBold', f);
-                            boldRegistered = true;
-                            break;
+                            try {
+                                doc.registerFont('MainBold', f);
+                                boldRegistered = true;
+                                boldFont = 'MainBold';
+                                break;
+                            } catch (e) {
+                                console.error(`Error registering bold font ${f}:`, e);
+                            }
                         }
                     }
-                    if (!boldRegistered) doc.registerFont('MainBold', 'Helvetica-Bold');
+                    
+                    doc.font(mainFont);
+                };
 
-                    doc.font('Main');
+                // Helper for Page Breaks
+                const checkPage = (pdfDoc, threshold = 50) => {
+                    if (pdfDoc.y > pdfDoc.page.height - threshold - 50) {
+                        pdfDoc.addPage({ margin: 0 });
+                        drawBackground(pdfDoc);
+                        pdfDoc.y = 50;
+                        pdfDoc.font(mainFont).fontSize(9);
+                        return true;
+                    }
+                    return false;
                 };
 
                 registerFonts();
@@ -131,22 +154,24 @@ class PdfService {
 
                 // --- Header Section ---
                 doc.fillColor(colors.text)
-                   .font('MainBold')
+                   .font(boldFont)
                    .fontSize(18)
                    .text('ravon_ai bot', 0, 40, { align: 'center' });
                 doc.fontSize(8)
-                   .font('Main')
+                   .font(mainFont)
                    .text('TALAFUZNI PROFESIONAL TAHLILI', 0, 60, { align: 'center' });
 
                 // User Info
+                const cleanFirstName = this.cleanText(user.first_name);
+                const cleanLastName = this.cleanText(user.last_name || '');
                 doc.fillColor('#7f8c8d')
                    .fontSize(9)
-                   .text(`Foydalanuvchi: ${user.first_name} ${user.last_name || ''}`, pageWidth - 220, 40, { width: 170, align: 'right' });
+                   .text(`Foydalanuvchi: ${cleanFirstName} ${cleanLastName}`, pageWidth - 220, 40, { width: 170, align: 'right' });
                 doc.text(`Sana: ${new Date().toLocaleDateString('uz-UZ')}`, pageWidth - 220, 52, { width: 170, align: 'right' });
 
                 // Title
                 doc.fillColor(colors.text)
-                   .font('MainBold')
+                   .font(boldFont)
                    .fontSize(20)
                    .text('NUTQ RAVONLIGI TAHLILI', 0, 95, { align: 'center' });
 
@@ -161,7 +186,7 @@ class PdfService {
                 doc.circle(circleX, circleY, radius).lineWidth(12).stroke(colors.lightGray);
                 doc.save().lineWidth(12).strokeColor(scoreColor).circle(circleX, circleY, radius).stroke().restore();
 
-                doc.fillColor(colors.text).font('MainBold').fontSize(40)
+                doc.fillColor(colors.text).font(boldFont).fontSize(40)
                    .text(`${score}%`, circleX - 100, circleY - 20, { width: 200, align: 'center' });
 
                 // --- Rating Stars ---
@@ -172,10 +197,10 @@ class PdfService {
                 for(let i=0; i<5; i++) stars += i < starCount ? '★' : '☆';
                 doc.text(stars, circleX - 60, starY, { width: 120, align: 'center' });
 
-                doc.fillColor(colors.text).font('MainBold').fontSize(11)
-                   .text(`Umumiy Ball: ${assessment.englishLevel}`, 0, starY + 25, { align: 'center' });
+                doc.fillColor(colors.text).font(boldFont).fontSize(11)
+                   .text(`Umumiy Ball: ${this.cleanText(assessment.englishLevel)}`, 0, starY + 25, { align: 'center' });
                 
-                doc.font('Main').fontSize(9)
+                doc.font(mainFont).fontSize(9)
                    .text('Nutqingiz tahlili natijalari quyidagicha:', 0, starY + 42, { align: 'center' });
 
                 doc.y = starY + 65;
@@ -184,15 +209,15 @@ class PdfService {
 
                 // --- Transcript Section ---
                 checkPage(doc, 100);
-                doc.fillColor(colors.text).font('MainBold').fontSize(13)
+                doc.fillColor(colors.text).font(boldFont).fontSize(13)
                    .text('TRANSKRIPT VA XATOLAR', 0, doc.y, { align: 'center' });
                 doc.moveDown(0.5);
 
-                const transcription = assessment.transcription;
+                const transcription = this.cleanText(assessment.transcription);
                 const mispronouncedWords = assessment.detailedFeedback?.phoneticAnalysis?.mispronouncedWords || [];
-                const mispronouncedList = mispronouncedWords.map(m => m.word.toLowerCase());
+                const mispronouncedList = mispronouncedWords.map(m => this.cleanText(m.word).toLowerCase());
 
-                doc.font('Main').fontSize(12).fillColor(colors.text);
+                doc.font(mainFont).fontSize(12).fillColor(colors.text);
                 const words = transcription.split(/\s+/);
                 let currentX = 80;
                 let currentLineY = doc.y;
@@ -211,8 +236,8 @@ class PdfService {
                         }
                     }
 
-                    if (isError) doc.fillColor(colors.red).font('MainBold');
-                    else doc.fillColor(colors.text).font('Main');
+                    if (isError) doc.fillColor(colors.red).font(boldFont);
+                    else doc.fillColor(colors.text).font(mainFont);
 
                     doc.text(word + ' ', currentX, currentLineY, { lineBreak: false });
                     currentX += wordWidth;
@@ -223,19 +248,21 @@ class PdfService {
                 // --- Errors Detailed Analysis ---
                 if (mispronouncedWords.length > 0) {
                     checkPage(doc, 50);
-                    doc.fillColor(colors.red).font('MainBold').fontSize(11).text('XATOLAR TAHLILI (BATAFSIL)', 75, doc.y);
+                    doc.fillColor(colors.red).font(boldFont).fontSize(11).text('XATOLAR TAHLILI (BATAFSIL)', 75, doc.y);
                     doc.moveDown(0.5);
                     
                     mispronouncedWords.slice(0, 8).forEach(m => {
                         checkPage(doc, 40);
                         const errorY = doc.y;
-                        doc.fillColor(colors.red).font('MainBold').fontSize(9).text(`${m.word.toUpperCase()}`, 85, errorY);
+                        const wordText = this.cleanText(m.word).toUpperCase();
+                        doc.fillColor(colors.red).font(boldFont).fontSize(9).text(wordText, 85, errorY);
                         
-                        const wordWidth = doc.widthOfString(m.word.toUpperCase());
-                        doc.fillColor(colors.darkBlue).font('Main').fontSize(9).text(`[${m.correctPronunciation}]`, 85 + wordWidth + 8, errorY);
+                        const wordWidth = doc.widthOfString(wordText);
+                        doc.fillColor(colors.darkBlue).font(mainFont).fontSize(9).text(`[${this.cleanText(m.correctPronunciation)}]`, 85 + wordWidth + 8, errorY);
                         
                         doc.moveDown(0.2);
-                        doc.fillColor(colors.text).font('Main').fontSize(8.5).text(`• ${m.phoneticError}. ${m.improvementTip}`, 100, doc.y, { width: pageWidth - 180 });
+                        const errorMsg = this.cleanText(`• ${m.phoneticError}. ${m.improvementTip}`);
+                        doc.fillColor(colors.text).font(mainFont).fontSize(8.5).text(errorMsg, 100, doc.y, { width: pageWidth - 180 });
                         doc.moveDown(0.4);
                     });
                     doc.moveDown(0.5);
@@ -254,19 +281,21 @@ class PdfService {
                 let col2Y = sectionStartY;
 
                 // Column 1: Strengths
-                doc.fillColor(colors.green).font('MainBold').fontSize(11).text('KUCHLI TOMONLAR', 70, col1Y);
+                doc.fillColor(colors.green).font(boldFont).fontSize(11).text('KUCHLI TOMONLAR', 70, col1Y);
                 col1Y += 18;
                 strengths.slice(0, 3).forEach(s => {
-                    doc.fillColor(colors.text).font('Main').fontSize(9).text(`• ${s}`, 70, col1Y, { width: recWidth });
-                    col1Y += doc.heightOfString(`• ${s}`, { width: recWidth }) + 4;
+                    const sText = this.cleanText(`• ${s}`);
+                    doc.fillColor(colors.text).font(mainFont).fontSize(9).text(sText, 70, col1Y, { width: recWidth });
+                    col1Y += doc.heightOfString(sText, { width: recWidth }) + 4;
                 });
 
                 // Column 2: Action Plan
-                doc.fillColor(colors.orange).font('MainBold').fontSize(11).text('RIVOJLANISH REJASI', pageWidth / 2 + 10, col2Y);
+                doc.fillColor(colors.orange).font(boldFont).fontSize(11).text('RIVOJLANISH REJASI', pageWidth / 2 + 10, col2Y);
                 col2Y += 18;
                 actionPlan.slice(0, 3).forEach(p => {
-                    doc.fillColor(colors.text).font('Main').fontSize(9).text(`• ${p}`, pageWidth / 2 + 10, col2Y, { width: recWidth });
-                    col2Y += doc.heightOfString(`• ${p}`, { width: recWidth }) + 4;
+                    const pText = this.cleanText(`• ${p}`);
+                    doc.fillColor(colors.text).font(mainFont).fontSize(9).text(pText, pageWidth / 2 + 10, col2Y, { width: recWidth });
+                    col2Y += doc.heightOfString(pText, { width: recWidth }) + 4;
                 });
 
                 doc.y = Math.max(col1Y, col2Y) + 20;
