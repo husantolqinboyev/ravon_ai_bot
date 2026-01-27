@@ -6,13 +6,13 @@ module.exports = {
     MAX_AUDIO_DURATION: 30, // seconds
     SUPPORTED_AUDIO_TYPES: ['audio/ogg', 'audio/mpeg', 'audio/wav'],
     
-    // Ravon Settings
-    RAVON_API_KEY: process.env.GEMINI_API_KEY,
-    RAVON_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    // OpenRouter Settings
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'google/gemini-flash-1.5',
 
     // Legacy Gemini aliases (for backward compatibility)
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    GEMINI_API_KEY: process.env.OPENROUTER_API_KEY,
+    GEMINI_MODEL: process.env.OPENROUTER_MODEL || 'google/gemini-flash-1.5',
 
     // Admin Settings
     ADMIN_IDS: process.env.ADMIN_ID ? process.env.ADMIN_ID.split(',').map(id => id.trim()) : [],

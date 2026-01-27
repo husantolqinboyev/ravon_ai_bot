@@ -16,11 +16,16 @@ class AssessmentService {
             // Log API usage if available
             if (assessment._usage) {
                 try {
+                    // OpenRouter usage structure can be different
+                    const promptTokens = assessment._usage.prompt_tokens || assessment._usage.promptTokenCount || 0;
+                    const completionTokens = assessment._usage.completion_tokens || assessment._usage.candidatesTokenCount || 0;
+                    const totalTokens = assessment._usage.total_tokens || assessment._usage.totalTokenCount || 0;
+
                     await database.logApiUsage(
                         assessment._model,
-                        assessment._usage.promptTokenCount,
-                        assessment._usage.candidatesTokenCount,
-                        assessment._usage.totalTokenCount,
+                        promptTokens,
+                        completionTokens,
+                        totalTokens,
                         `assessment_${type}`
                     );
                 } catch (logError) {
