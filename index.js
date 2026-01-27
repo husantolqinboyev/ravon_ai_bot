@@ -24,6 +24,10 @@ bot.use(async (ctx, next) => {
 
     // Handle Broadcast state first
     if (ctx.session?.state === 'waiting_for_broadcast_message' && (ctx.message || ctx.editedMessage)) {
+        // Only proceed if it's NOT a cancel command
+        if (ctx.message?.text === '❌ Bekor qilish') {
+            return commandHandler.handleBroadcast(ctx);
+        }
         return commandHandler.handleBroadcast(ctx);
     }
 
@@ -175,8 +179,12 @@ bot.on('text', async (ctx, next) => {
 });
 
 // Photo handling for payment receipts
-bot.on('photo', async (ctx) => {
-    if (ctx.session?.state === 'waiting_for_payment_details') {
+bot.on(['photo', 'video', 'document'], async (ctx) => {
+    if (ctx.session?.state === 'waiting_for_broadcast_message') {
+        return commandHandler.handleBroadcast(ctx);
+    }
+
+    if (ctx.session?.state === 'waiting_for_payment_details' && ctx.message.photo) {
         const photo = ctx.message.photo[ctx.message.photo.length - 1];
         const caption = ctx.message.caption || 'Izohsiz yuborildi';
         

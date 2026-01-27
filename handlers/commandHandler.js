@@ -407,7 +407,7 @@ class CommandHandler {
         }
 
         const users = await database.getAllUsers();
-        await ctx.reply(`Xabar ${users.length} ta foydalanuvchiga yuborilmoqda...`);
+        await ctx.reply(`Xabar ${users.length} ta foydalanuvchiga yuborilmoqda...`, Markup.removeKeyboard());
         
         ctx.session.state = null;
         let successCount = 0;
@@ -415,14 +415,18 @@ class CommandHandler {
 
         for (const user of users) {
             try {
-                // copyMessage copies the original message with all its properties (caption, entities, etc.)
+                // Skip the admin who is sending the message to avoid duplicate or error in copyMessage logic if needed
+                // but usually it's fine to send to everyone.
+                
                 await ctx.telegram.copyMessage(user.telegram_id, ctx.chat.id, ctx.message.message_id);
                 successCount++;
-                // Add small delay to avoid hitting rate limits (30 messages per second is Telegram's limit)
-                await new Promise(resolve => setTimeout(resolve, 50));
+                
+                // Rate limiting: 30 messages per second is the limit. 50ms = 20 msg/sec.
+                if (successCount % 20 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             } catch (error) {
                 console.error(`Broadcast failed for ${user.telegram_id}:`, error.message);
-                // If user blocked the bot, we could potentially deactivate them in DB here
                 failCount++;
             }
         }
