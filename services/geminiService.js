@@ -13,6 +13,7 @@ class GeminiService {
 
     async analyzeAudio(audioBuffer, mimeType, type = 'general', targetText = null, retryCount = 0) {
         try {
+            console.log(`Audio tahlili boshlandi: Mime: ${mimeType}, Hajm: ${audioBuffer.length} bytes`);
             let contextInstruction = "";
             if (type === 'test' && targetText) {
                 contextInstruction = `Focus analysis on word: "${targetText}".`;
@@ -26,14 +27,14 @@ class GeminiService {
                 Feedback in UZBEK. Transcription/IPA in English.
 
                 Metrics (0-100):
-                1. Phonetic Accuracy (phonemes, vowel length).
-                2. Oral Fluency (rate, hesitations, fillers "uh", "um", pauses "...").
-                3. Prosody (stress, rhythm, intonation).
+                1. Phonetic Accuracy.
+                2. Oral Fluency (fillers "uh", "um", pauses "...").
+                3. Prosody.
                 4. Word Accuracy.
-                5. Grammar/Lexical complexity.
+                5. Grammar/Lexical.
                 6. Intelligibility.
 
-                Return JSON:
+                IMPORTANT: Return ONLY a valid JSON object.
                 {
                     "overallScore": number,
                     "accuracyScore": number,
@@ -41,9 +42,9 @@ class GeminiService {
                     "prosodyScore": number,
                     "completenessScore": number,
                     "wordAccuracy": number,
-                    "ipa": "Word [ipa]",
-                    "stressExample": "STRESSED words in CAPS",
-                    "transcription": "Verbatim with fillers/pauses",
+                    "ipa": "IPA",
+                    "stressExample": "STRESS",
+                    "transcription": "Verbatim",
                     "englishLevel": "CEFR",
                     "detailedFeedback": {
                         "strengths": ["UZB"],
@@ -52,7 +53,7 @@ class GeminiService {
                             "mispronouncedWords": [{"word": "str", "errorType": "type", "phoneticError": "UZB", "correctPronunciation": "IPA", "improvementTip": "UZB"}],
                             "prosodyFeedback": "UZB"
                         },
-                        "actionPlan": ["3-5 steps UZB"]
+                        "actionPlan": ["steps UZB"]
                     }
                 }
             `;
@@ -76,7 +77,6 @@ class GeminiService {
                         ]
                     }
                 ],
-                response_format: { type: "json_object" },
                 temperature: 0.1, 
                 max_tokens: 2000
             }, {
@@ -115,7 +115,11 @@ class GeminiService {
                 _model: this.modelName
             };
         } catch (error) {
-            console.error("OpenRouter API Error Details:", error.response?.data || error.message);
+            if (error.response) {
+                console.error("OpenRouter API Xatosi (Response):", JSON.stringify(error.response.data));
+            } else {
+                console.error("OpenRouter API Xatosi (Message):", error.message);
+            }
             
             if (retryCount < 2) {
                 console.log(`Retrying... (${retryCount + 1})`);

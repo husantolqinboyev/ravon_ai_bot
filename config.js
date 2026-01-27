@@ -8,7 +8,7 @@ module.exports = {
     
     // OpenRouter Settings
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
-    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'google/gemini-flash-1.5',
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'google/gemini-3-flash-preview',
 
     // Legacy Gemini aliases (for backward compatibility)
     GEMINI_API_KEY: process.env.OPENROUTER_API_KEY,
