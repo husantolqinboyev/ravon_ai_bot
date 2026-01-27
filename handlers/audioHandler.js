@@ -66,6 +66,9 @@ class AudioHandler {
             await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
             
             // Store assessment data in session for PDF generation
+            if (!ctx.session) {
+                ctx.session = {};
+            }
             ctx.session.lastAssessmentData = result.data;
             ctx.session.lastAssessmentType = type;
 
