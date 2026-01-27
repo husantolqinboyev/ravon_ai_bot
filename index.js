@@ -280,14 +280,34 @@ const startBot = async (retries = 5) => {
         console.log(`📡 Health check server listening on port ${PORT}`);
     });
 
+    // Force polling mode to avoid webhook conflicts
+    process.env.TELEGRAM_API_URL = undefined;
+
     for (let i = 0; i < retries; i++) {
         try {
             console.log(`🚀 Starting Preimum English AI bot... (Attempt ${i + 1}/${retries})`);
-            await bot.launch();
-            console.log('✅ Bot is running!');
+            
+            // Clear any existing webhook
+            await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+            console.log('✅ Webhook cleared');
+            
+            // Start with polling
+            await bot.launch({
+                polling: {
+                    interval: 300,
+                    autoStart: true,
+                    allowedUpdates: ['message', 'callback_query', 'edited_message']
+                }
+            });
+            
+            console.log('✅ Bot is running with polling!');
             return;
         } catch (err) {
             console.error(`❌ Launch error (Attempt ${i + 1}):`, err.message);
+            if (err.message.includes('409')) {
+                console.log('⏳ Waiting for previous instance to stop...');
+                await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+            }
             if (i < retries - 1) {
                 const waitTime = 5000 * (i + 1);
                 console.log(`🔄 Retrying in ${waitTime/1000} seconds...`);
