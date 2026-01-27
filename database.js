@@ -69,6 +69,7 @@ class Database {
                 price INTEGER,
                 duration_days INTEGER,
                 limit_per_day INTEGER,
+                word_limit INTEGER DEFAULT 30,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`,
 
@@ -114,7 +115,8 @@ class Database {
             { table: 'users', column: 'referral_count', type: 'INTEGER DEFAULT 0' },
             { table: 'assessments', column: 'type', type: 'TEXT' },
             { table: 'assessments', column: 'word_accuracy', type: 'REAL' },
-            { table: 'assessments', column: 'target_text', type: 'TEXT' }
+            { table: 'users', column: 'word_limit', type: 'INTEGER DEFAULT 30' },
+            { table: 'tariffs', column: 'word_limit', type: 'INTEGER DEFAULT 30' }
         ];
 
         this.db.serialize(() => {
@@ -473,10 +475,10 @@ class Database {
     }
 
     // --- Tariff Management ---
-    async addTariff(name, price, duration, limit) {
+    async addTariff(name, price, duration, limit, wordLimit = 30) {
         return new Promise((resolve, reject) => {
-            this.db.run('INSERT INTO tariffs (name, price, duration_days, limit_per_day) VALUES (?, ?, ?, ?)', 
-                [name, price, duration, limit], (err) => {
+            this.db.run('INSERT INTO tariffs (name, price, duration_days, limit_per_day, word_limit) VALUES (?, ?, ?, ?, ?)', 
+                [name, price, duration, limit, wordLimit], (err) => {
                 if (err) reject(err);
                 else resolve(true);
             });
@@ -553,14 +555,14 @@ class Database {
         });
     }
 
-    async approvePremium(userId, days, dailyLimit) {
+    async approvePremium(userId, days, dailyLimit, wordLimit = 30) {
         return new Promise((resolve, reject) => {
             const until = new Date();
             until.setDate(until.getDate() + days);
             const untilStr = until.toISOString();
 
-            this.db.run('UPDATE users SET is_premium = 1, premium_until = ?, daily_limit = ? WHERE id = ?',
-                [untilStr, dailyLimit, userId], (err) => {
+            this.db.run('UPDATE users SET is_premium = 1, premium_until = ?, daily_limit = ?, word_limit = ? WHERE id = ?',
+                [untilStr, dailyLimit, wordLimit, userId], (err) => {
                 if (err) reject(err);
                 else resolve(true);
             });

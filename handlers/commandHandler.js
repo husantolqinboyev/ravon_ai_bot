@@ -1,5 +1,6 @@
 const { safeAnswerCbQuery, safeEditMessage } = require('../utils/telegramUtils');
 const { Markup } = require('telegraf');
+const { checkTextLimit } = require('../utils/textUtils');
 const assessmentService = require('../services/assessmentService');
 const pdfService = require('../services/pdfService');
 const ttsService = require('../services/ttsService');
@@ -141,6 +142,43 @@ class CommandHandler {
 
     async handleMainMenu(ctx) {
         await ctx.reply('🏠 Asosiy menyu:', this.mainMenu);
+    }
+
+    async processTextForPronunciation(ctx) {
+        const text = ctx.message.text;
+        const user = await database.getUserByTelegramId(ctx.from.id);
+        
+        // Check word limit
+        const limitCheck = checkTextLimit(text, user);
+        
+        if (!limitCheck.allowed) {
+            return ctx.reply(`⚠️ Matn uzunligi limitdan oshdi!\n\nSizning limitiz: ${limitCheck.limit} so'z\nYuborgan matningiz: ${limitCheck.wordCount} so'z\n\nIltimos, qisqaroq matn yuboring yoki Premium obunaga o'ting.`);
+        }
+        
+        // Check daily limit
+        const canProceed = await database.checkLimit(ctx.from.id);
+        if (!canProceed) {
+            delete ctx.session.state;
+            const userId = ctx.from.id;
+            const botUsername = ctx.botInfo.username;
+            const referralLink = `https://t.me/${botUsername}?start=${userId}`;
+            
+            const msg = "⚠️ *Kunlik limitingiz tugagan!*\n\n" +
+                "Xavotir olmang, limitingizni osongina oshirishingiz mumkin. " +
+                "Har 3 ta taklif qilingan do'stingiz uchun sizga *+3 ta bonus limit* beriladi!\n\n" +
+                "🔗 *Sizning referal havolangiz:*\n" +
+                `\`${referralLink}\``;
+            
+            return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
+                [Markup.button.callback('🔗 Referal bo\'limi', 'show_referral_info')]
+            ]));
+        }
+        
+        ctx.session.testWord = text;
+        ctx.session.state = 'waiting_for_test_audio';
+        
+        await ctx.reply(`✅ So'z qabul qilindi (${limitCheck.wordCount}/${limitCheck.limit} so'z)!\n\n🎙 Endi shu so'zni ovozli yozib yuboring:`);
+        await ctx.reply(`_"${text}"_`, { parse_mode: 'Markdown' });
     }
 
     async handleTestPronunciation(ctx) {
@@ -800,7 +838,7 @@ class CommandHandler {
                 msg += "_Hozircha tariflar yo'q._\n";
             } else {
                 tariffs.forEach(t => {
-                    msg += `• *${t.name}*: ${t.price.toLocaleString()} so'm / ${t.duration_days} kun (${t.limit_per_day} ta/kun)\n`;
+                    msg += `• *${t.name}*: ${t.price.toLocaleString()} so'm / ${t.duration_days} kun (${t.limit_per_day} ta/kun, ${t.word_limit || 30} so'z)\n`;
                     buttons.push([Markup.button.callback(`❌ O'chirish: ${t.name}`, `delete_tariff_${t.id}`)]);
                 });
             }
@@ -826,7 +864,7 @@ class CommandHandler {
         if (!isAdmin) return;
 
         ctx.session.state = 'waiting_for_tariff_info';
-        await ctx.reply('💰 Yangi tarif ma\'lumotlarini quyidagi formatda yuboring:\n\n`NOM NARX KUN LIMIT`\n\nMisol: `Premium 50000 30 50`\n\nBekor qilish uchun /cancel deb yozing.', { parse_mode: 'Markdown' });
+        await ctx.reply('💰 Yangi tarif ma\'lumotlarini quyidagi formatda yuboring:\n\n`NOM NARX KUN LIMIT SOZ_LIMIT`\n\nMisol: `Premium 50000 30 50 500`\n\nBekor qilish uchun /cancel deb yozing.', { parse_mode: 'Markdown' });
         if (ctx.callbackQuery) await ctx.answerCbQuery();
     }
 
@@ -842,20 +880,21 @@ class CommandHandler {
 
         // Split by space but handle multiple spaces
         const parts = text.trim().split(/\s+/);
-        if (parts.length < 4) return ctx.reply("❌ Format noto'g'ri. Iltimos, quyidagicha yuboring:\n\n`NOM NARX KUN LIMIT`.\n\nMisol: `Standard 50000 30 50`", { parse_mode: 'Markdown' });
+        if (parts.length < 5) return ctx.reply("❌ Format noto'g'ri. Iltimos, quyidagicha yuboring:\n\n`NOM NARX KUN LIMIT SOZ_LIMIT`.\n\nMisol: `Standard 50000 30 50 200`", { parse_mode: 'Markdown' });
 
         const name = parts[0];
         const price = parseInt(parts[1]);
         const duration = parseInt(parts[2]);
         const limit = parseInt(parts[3]);
+        const wordLimit = parseInt(parts[4]);
 
-        if (isNaN(price) || isNaN(duration) || isNaN(limit)) {
-            return ctx.reply("❌ Narx, kun va limit son bo'lishi kerak. Misol: `Standard 50000 30 50`", { parse_mode: 'Markdown' });
+        if (isNaN(price) || isNaN(duration) || isNaN(limit) || isNaN(wordLimit)) {
+            return ctx.reply("❌ Narx, kun, limit va so'z limiti son bo'lishi kerak. Misol: `Standard 50000 30 50 200`", { parse_mode: 'Markdown' });
         }
 
-        await database.addTariff(name, price, duration, limit);
+        await database.addTariff(name, price, duration, limit, wordLimit);
         ctx.session.state = null;
-        await ctx.reply(`✅ Yangi tarif qo'shildi: *${name}*`, { parse_mode: 'Markdown', ...this.adminMenu });
+        await ctx.reply(`✅ Yangi tarif qo'shildi: *${name}* (${wordLimit} so'z limit)`, { parse_mode: 'Markdown', ...this.adminMenu });
     }
 
     async handleApiMonitoring(ctx) {
@@ -948,7 +987,7 @@ class CommandHandler {
         if (!payment) return ctx.answerCbQuery("To'lov topilmadi.");
 
         await database.updatePaymentStatus(paymentId, 'approved');
-        await database.approvePremium(payment.user_id, payment.duration_days, payment.limit_per_day);
+        await database.approvePremium(payment.user_id, payment.duration_days, payment.limit_per_day, payment.word_limit || 30);
 
         await ctx.answerCbQuery("✅ To'lov tasdiqlandi!");
         await ctx.editMessageCaption(`✅ *To'lov tasdiqlandi (ID: ${paymentId})*`, { parse_mode: 'Markdown' });
@@ -959,7 +998,8 @@ class CommandHandler {
                 `🎉 *Tabriklaymiz!* Sizning to'lovingiz tasdiqlandi.\n\n` +
                 `💎 Premium obuna faollashdi!\n` +
                 `📅 Amal qilish muddati: ${payment.duration_days} kun\n` +
-                `🚀 Kunlik limitingiz: ${payment.limit_per_day} taga oshirildi.`, { parse_mode: 'Markdown' });
+                `🚀 Kunlik limitingiz: ${payment.limit_per_day} taga oshirildi.\n` +
+                `📝 Matn uzunligi limiti: ${payment.word_limit || 30} so'z.`, { parse_mode: 'Markdown' });
         } catch (e) {
             console.error('Notify user error:', e);
         }

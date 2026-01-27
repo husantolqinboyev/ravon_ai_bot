@@ -5,6 +5,7 @@ const ttsService = require('../services/ttsService');
 const pdfService = require('../services/pdfService');
 const database = require('../database');
 const config = require('../config');
+const { checkTextLimit } = require('../utils/textUtils');
 
 class AudioHandler {
     async handleAudio(ctx) {
@@ -168,6 +169,14 @@ class AudioHandler {
         }
 
         if (state === 'waiting_for_tts_text') {
+            // Check user's word limit
+            const user = await database.getUserByTelegramId(ctx.from.id);
+            const limitCheck = checkTextLimit(text, user);
+            
+            if (!limitCheck.allowed) {
+                return ctx.reply(`⚠️ Matn uzunligi limitdan oshdi!\n\nSizning limitiz: ${limitCheck.limit} so'z\nYuborgan matningiz: ${limitCheck.wordCount} so'z\n\nIltimos, qisqaroq matn yuboring yoki Premium obunaga o'ting.`);
+            }
+            
             const canProceed = await database.checkLimit(ctx.from.id);
             if (!canProceed) {
                 delete ctx.session.state;
@@ -186,7 +195,7 @@ class AudioHandler {
                 ]));
             }
 
-            await ctx.reply('Matn qabul qilindi. Audio tayyorlanmoqda... ⏳');
+            await ctx.reply(`Matn qabul qilindi (${limitCheck.wordCount}/${limitCheck.limit} so'z). Audio tayyorlanmoqda... ⏳`);
             
             try {
                 const audioPath = await ttsService.generateAudio(text, 'en');
