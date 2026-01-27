@@ -68,9 +68,10 @@ class GeminiService {
                                 text: prompt.replace(/\s+/g, ' ').trim() // Promptni siqish (token tejash)
                             },
                             {
-                                type: "image_url",
-                                image_url: {
-                                    url: `data:${mimeType};base64,${audioBuffer.toString("base64")}`
+                                type: "input_audio",
+                                input_audio: {
+                                    data: audioBuffer.toString("base64"),
+                                    format: mimeType.includes('wav') ? 'wav' : (mimeType.includes('mpeg') ? 'mp3' : 'ogg')
                                 }
                             }
                         ]
