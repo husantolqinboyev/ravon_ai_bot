@@ -65,29 +65,34 @@ class GeminiService {
                         content: [
                             {
                                 type: "text",
-                                text: prompt.replace(/\s+/g, ' ').trim() // Promptni siqish (token tejash)
+                                text: prompt.replace(/\s+/g, ' ').trim() // Promptni siqish
                             },
                             {
-                                type: "input_audio",
-                                input_audio: {
-                                    data: audioBuffer.toString("base64"),
-                                    format: mimeType.includes('wav') ? 'wav' : (mimeType.includes('mpeg') ? 'mp3' : 'ogg')
+                                type: "image_url",
+                                image_url: {
+                                    url: `data:${mimeType};base64,${audioBuffer.toString("base64")}`
                                 }
                             }
                         ]
                     }
                 ],
                 response_format: { type: "json_object" },
-                temperature: 0.3, // Barqarorlik uchun
-                max_tokens: 1500  // Limitni cheklash (keraksiz uzun javoblarni oldini olish)
+                temperature: 0.1, 
+                max_tokens: 2000
             }, {
                 headers: {
                     'Authorization': `Bearer ${this.apiKey}`,
                     'HTTP-Referer': 'https://github.com/ravon-ai',
                     'X-Title': 'Ravon AI Bot',
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 60000 // 60 sekund kutish (audio tahlili uzoqroq vaqt olishi mumkin)
             });
+
+            if (!response.data || !response.data.choices || response.data.choices.length === 0) {
+                console.error("OpenRouter javobi bo'sh:", JSON.stringify(response.data));
+                throw new Error("OpenRouterdan bo'sh javob keldi.");
+            }
 
             const text = response.data.choices[0].message.content;
             const usage = response.data.usage;
