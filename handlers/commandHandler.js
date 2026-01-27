@@ -1,4 +1,5 @@
 const { safeAnswerCbQuery, safeEditMessage } = require('../utils/telegramUtils');
+const { Markup } = require('telegraf');
 const assessmentService = require('../services/assessmentService');
 const pdfService = require('../services/pdfService');
 const ttsService = require('../services/ttsService');
