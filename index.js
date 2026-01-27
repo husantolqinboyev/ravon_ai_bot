@@ -224,36 +224,15 @@ bot.catch((err, ctx) => {
     ctx.reply("Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.");
 });
 
-// Update bot description with user count
+// Update bot description with simple description
 const updateBotDescription = async () => {
     try {
-        const monthlyUsers = await database.getMonthlyUsers();
-        const totalUsers = await database.getTotalUserCount();
+        // Set simple description without user count for now
+        const description = "Ingliz tili talaffuzini baholash boti";
         
-        // Get admin list to check if current user is admin
-        const admins = await database.getAdmins();
-        const adminIds = admins.map(admin => admin.telegram_id);
-        
-        // For public users - show impressive numbers
-        let displayUsers, userLabel;
-        if (monthlyUsers > 100) {
-            // Multiply monthly users for impressive display
-            displayUsers = Math.floor(monthlyUsers * 2.5); // Multiply by 2.5
-            userLabel = 'oylik';
-        } else {
-            // Show impressive base number for small user counts
-            displayUsers = Math.floor(Math.random() * 50) + 120; // Random between 120-170
-            userLabel = 'oylik';
-        }
-        
-        const publicDescription = `${displayUsers.toLocaleString()} ${userLabel} foydalanuvchi`;
-        
-        // Update bot description for public
-        await bot.telegram.setMyDescription(publicDescription);
-        console.log(`Bot description updated (public): ${publicDescription}`);
-        
-        // Log real numbers for admin reference
-        console.log(`Real stats - Monthly: ${monthlyUsers}, Total: ${totalUsers}`);
+        // Update bot description
+        await bot.telegram.setMyDescription(description);
+        console.log(`Bot description updated: ${description}`);
         
     } catch (error) {
         console.error('Error updating bot description:', error);

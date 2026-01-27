@@ -71,9 +71,15 @@ class CommandHandler {
         }
         
         let welcomeMessage = `Assalomu alaykum! 👋\n\n` +
-            `Men **Ravon AI** - sizning ingliz tili talaffuzingizni baholashga yordam beruvchi botman.\n` +
-            `👥 ${displayUsers.toLocaleString()} ${userLabel} foydalanuvchi\n\n` +
-            `Quyidagi bo'limlardan birini tanlang:`;
+            `Men **Ravon AI** — sizning ingliz tili talaffuzingizni baholashga yordam beruvchi botman.\n\n` +
+            `🎯 **Ravon AI — Talaffuzingizni mukammallashtiring!**\n\n` +
+            `Assalomu alaykum! Ingliz tilida ravon gapirishni biz bilan o'rganing.\n\n` +
+            `**Bot imkoniyatlari:**\n\n` +
+            `✅ **Talaffuzni tekshirish:** Nutqingizni ovozli xabar orqali yuboring va xatolarni aniqlang.\n` +
+            `✅ **Matnni audioga o'tkazish:** Har qanday matnni to'g'ri talaffuzda eshiting.\n` +
+            `✅ **PDF tahlil:** Nutqingiz natijalarini professional PDF hisobot ko'rinishida oling.\n\n` +
+            `🎁 **Siz uchun 3 ta bepul imkoniyat tayyor!**\n\n` +
+            `👇 Hoziroq quyidagi bo'limlardan birini tanlang va nutqingizni sinab ko'ring!`;
         
         if (isAdmin) {
             welcomeMessage += `\n\n👨‍💼 Siz adminsiz. Admin panelga kirish uchun /admin buyrug'ini yuboring.`;
@@ -592,10 +598,14 @@ class CommandHandler {
 
     async handleHelp(ctx) {
         const helpMessage = `🤖 *Botdan qanday foydalanish mumkin?*\n\n` +
-            `1️⃣ *Talaffuzni test qilish* - Bot so'z beradi, siz o'qiysiz.\n` +
-            `2️⃣ *Matn va Audio* - Siz matn yozasiz, keyin o'qiysiz.\n` +
-            `3️⃣ *Matnni audyoga* - Siz matn yozasiz, bot uni o'qib beradi.\n\n` +
-            `📊 Natijalar Ravon AI orqali tahlil qilinadi.`;
+            `🎯 **Ravon AI — Talaffuzingizni mukammallashtiring!**\n\n` +
+            `Assalomu alaykum! Ingliz tilida ravon gapirishni biz bilan o'rganing.\n\n` +
+            `**Bot imkoniyatlari:**\n\n` +
+            `✅ **Talaffuzni tekshirish:** Nutqingizni ovozli xabar orqali yuboring va xatolarni aniqlang.\n` +
+            `✅ **Matnni audioga o'tkazish:** Har qanday matnni to'g'ri talaffuzda eshiting.\n` +
+            `✅ **PDF tahlil:** Nutqingiz natijalarini professional PDF hisobot ko'rinishida oling.\n\n` +
+            `🎁 **Siz uchun 3 ta bepul imkoniyat tayyor!**\n\n` +
+            `👇 Hoziroq /start tugmasini bosing va nutqingizni sinab ko'ring!`;
         
         await ctx.replyWithMarkdown(helpMessage);
     }
