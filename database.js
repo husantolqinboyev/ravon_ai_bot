@@ -360,39 +360,60 @@ class Database {
                         else resolve(row.id);
                     });
                 } else {
-                    // Insert new user
-                    const query = `
-                        INSERT INTO users 
-                        (telegram_id, username, first_name, last_name, language_code, referred_by) 
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    `;
-                    this.db.run(query, [
-                        userData.id,
-                        userData.username,
-                        userData.first_name,
-                        userData.last_name,
-                        userData.language_code,
-                        referrerId
-                    ], async (err) => {
+                    // Insert new user with additional safety check
+                    // Double check if user doesn't exist to prevent race conditions
+                    this.db.get('SELECT id FROM users WHERE telegram_id = ?', [userData.id], (err, existingRow) => {
                         if (err) return reject(err);
                         
-                        const newUserId = this.lastID;
-
-                        // If there's a referrer, update their count and check for reward
-                        if (referrerId && String(referrerId) !== String(userData.id)) {
-                            // Anti-cheat: Check if referrer exists
-                            this.db.get('SELECT id FROM users WHERE telegram_id = ?', [referrerId], async (err, referrerRow) => {
-                                if (!err && referrerRow) {
-                                    try {
-                                        await this.handleReferralReward(referrerId);
-                                    } catch (error) {
-                                        console.error('Referral reward error:', error);
-                                    }
-                                }
-                            });
+                        if (existingRow) {
+                            // User was created by another process, return existing ID
+                            return resolve(existingRow.id);
                         }
                         
-                        resolve(newUserId);
+                        // Safe to insert new user
+                        const query = `
+                            INSERT OR IGNORE INTO users 
+                            (telegram_id, username, first_name, last_name, language_code, referred_by) 
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        `;
+                        this.db.run(query, [
+                            userData.id,
+                            userData.username,
+                            userData.first_name,
+                            userData.last_name,
+                            userData.language_code,
+                            referrerId
+                        ], async (err) => {
+                            if (err) return reject(err);
+                            
+                            const newUserId = this.lastID;
+                            
+                            // If no rows were inserted (IGNORE), get the existing user
+                            if (newUserId === 0) {
+                                this.db.get('SELECT id FROM users WHERE telegram_id = ?', [userData.id], (err, row) => {
+                                    if (err) return reject(err);
+                                    if (row) return resolve(row.id);
+                                    return reject(new Error('Failed to create or find user'));
+                                });
+                                return;
+                            }
+
+                            // If there's a referrer, update their count and check for reward
+                            if (referrerId && String(referrerId) !== String(userData.id)) {
+                                // Anti-cheat: Check if referrer exists
+                                this.db.get('SELECT id FROM users WHERE telegram_id = ?', [referrerId], async (err, referrerRow) => {
+                                    if (!err && referrerRow) {
+                                        try {
+                                            await this.handleReferralReward(referrerId);
+                                        } catch (error) {
+                                            console.error('Referral reward error:', error);
+                                        }
+                                    }
+                                });
+                            }
+
+                            resolve(newUserId);
+                        });
                     });
                 }
             });

@@ -2,6 +2,7 @@ const { Telegraf, session, Markup } = require('telegraf');
 const http = require('http');
 const https = require('https');
 const config = require('./config');
+const { safeAnswerCbQuery } = require('./utils/telegramUtils');
 const commandHandler = require('./handlers/commandHandler');
 const audioHandler = require('./handlers/audioHandler');
 const database = require('./database');
@@ -70,15 +71,15 @@ bot.action('check_subscription', async (ctx) => {
         const isMember = ['member', 'administrator', 'creator'].includes(member.status);
 
         if (isMember) {
-            await ctx.answerCbQuery("✅ Rahmat! Endi botdan foydalanishingiz mumkin.");
+            await safeAnswerCbQuery(ctx, "✅ Rahmat! Endi botdan foydalanishingiz mumkin.");
             await ctx.deleteMessage().catch(() => {});
             return commandHandler.handleStart(ctx);
         } else {
-            await ctx.answerCbQuery("❌ Siz hali kanalga a'zo emassiz!", { show_alert: true });
+            await safeAnswerCbQuery(ctx, "❌ Siz hali kanalga a'zo emassiz!", { show_alert: true });
         }
     } catch (error) {
         console.error('Check action error:', error);
-        await ctx.answerCbQuery("Xatolik yuz berdi. Iltimos, kanalga a'zo ekanligingizni tekshiring.");
+        await safeAnswerCbQuery(ctx, "Xatolik yuz berdi. Iltimos, kanalga a'zo ekanligingizni tekshiring.");
     }
 });
 
@@ -226,10 +227,31 @@ bot.on(['photo', 'video', 'document'], async (ctx) => {
     await ctx.reply("Iltimos, avval menyudan kerakli bo'limni tanlang.");
 });
 
-// Error handling
+// Error handling with better user blocking detection
 bot.catch((err, ctx) => {
     console.error(`Error for ${ctx.updateType}:`, err);
-    ctx.reply("Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.");
+    
+    // Check if user blocked the bot
+    if (err.response?.error_code === 403 && 
+        err.response?.description?.includes('bot was blocked by the user')) {
+        console.log(`User ${ctx.from?.id} blocked the bot`);
+        return; // Don't try to reply to blocked users
+    }
+    
+    // Check if it's a callback query timeout
+    if (err.response?.error_code === 400 && 
+        (err.response?.description?.includes('timeout') || 
+         err.response?.description?.includes('invalid'))) {
+        console.log('Callback query timeout - ignoring');
+        return; // Don't reply to timeout errors
+    }
+    
+    // For other errors, try to reply safely
+    try {
+        ctx.reply("Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.");
+    } catch (replyError) {
+        console.error('Failed to send error message:', replyError.message);
+    }
 });
 
 // Update bot description with simple description

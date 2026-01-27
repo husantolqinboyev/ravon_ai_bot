@@ -1,4 +1,4 @@
-const { Markup } = require('telegraf');
+const { safeAnswerCbQuery, safeEditMessage } = require('../utils/telegramUtils');
 const assessmentService = require('../services/assessmentService');
 const pdfService = require('../services/pdfService');
 const ttsService = require('../services/ttsService');
@@ -730,7 +730,7 @@ class CommandHandler {
         console.log('Session state set to waiting_for_card_info');
         
         await ctx.reply('💳 Yangi karta ma\'lumotlarini quyidagi formatda yuboring:\n\n`KARTA_RAKAMI KARTA_EGASI`\n\nMisol: `8600123456789012 Eshmat Toshmatov`\n\nBekor qilish uchun /cancel deb yozing.', { parse_mode: 'Markdown' });
-        if (ctx.callbackQuery) await ctx.answerCbQuery();
+        await safeAnswerCbQuery(ctx);
     }
 
     async handleSetCard(ctx) {
