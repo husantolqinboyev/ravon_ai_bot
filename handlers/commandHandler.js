@@ -679,11 +679,17 @@ class CommandHandler {
     // --- Admin Settings ---
     async handleCardSettings(ctx) {
         try {
+            console.log('handleCardSettings called by:', ctx.from.id);
             const isAdmin = await database.isAdmin(ctx.from.id);
-            if (!isAdmin) return;
+            console.log('Is admin:', isAdmin);
+            if (!isAdmin) {
+                console.log('User is not admin, returning');
+                return;
+            }
 
             const cardNum = await database.getSetting('card_number');
             const cardHolder = await database.getSetting('card_holder');
+            console.log('Card data:', { cardNum, cardHolder });
 
             let msg = `💳 *Karta Sozlamalari*\n\n`;
             msg += `Hozirgi karta: \`${cardNum || 'yo\'q'}\`\n`;
@@ -707,35 +713,75 @@ class CommandHandler {
     }
 
     async handleSetCardRequest(ctx) {
+        console.log('handleSetCardRequest called by:', ctx.from.id);
         const isAdmin = await database.isAdmin(ctx.from.id);
-        if (!isAdmin) return;
+        console.log('Is admin:', isAdmin);
+        if (!isAdmin) {
+            console.log('User is not admin, returning');
+            return;
+        }
 
+        // Ensure session exists
+        if (!ctx.session) {
+            ctx.session = {};
+        }
+        
         ctx.session.state = 'waiting_for_card_info';
+        console.log('Session state set to waiting_for_card_info');
+        
         await ctx.reply('💳 Yangi karta ma\'lumotlarini quyidagi formatda yuboring:\n\n`KARTA_RAKAMI KARTA_EGASI`\n\nMisol: `8600123456789012 Eshmat Toshmatov`\n\nBekor qilish uchun /cancel deb yozing.', { parse_mode: 'Markdown' });
         if (ctx.callbackQuery) await ctx.answerCbQuery();
     }
 
     async handleSetCard(ctx) {
+        console.log('handleSetCard called by:', ctx.from.id);
+        console.log('Session state:', ctx.session?.state);
+        
         const isAdmin = await database.isAdmin(ctx.from.id);
-        if (!isAdmin) return;
+        console.log('Is admin:', isAdmin);
+        if (!isAdmin) {
+            console.log('User is not admin, returning');
+            return;
+        }
 
         const text = ctx.message.text;
+        console.log('Received text:', text);
+        
         if (text === '/cancel') {
-            ctx.session.state = null;
+            // Ensure session exists before clearing
+            if (ctx.session) {
+                ctx.session.state = null;
+            }
             return ctx.reply('Bekor qilindi.', this.adminMenu);
         }
 
         // Split by space but handle multiple spaces
         const parts = text.trim().split(/\s+/);
-        if (parts.length < 2) return ctx.reply("❌ Format noto'g'ri. Iltimos, karta raqami va egasini yozing.\n\nMisol: `8600123456789012 Eshmat Toshmatov`", { parse_mode: 'Markdown' });
+        console.log('Text parts:', parts);
+        
+        if (parts.length < 2) {
+            console.log('Invalid format - parts length:', parts.length);
+            return ctx.reply("❌ Format noto'g'ri. Iltimos, karta raqami va egasini yozing.\n\nMisol: `8600123456789012 Eshmat Toshmatov`", { parse_mode: 'Markdown' });
+        }
 
         const cardNum = parts[0];
         const cardHolder = parts.slice(1).join(' ');
+        console.log('Card to save:', { cardNum, cardHolder });
 
-        await database.setSetting('card_number', cardNum);
-        await database.setSetting('card_holder', cardHolder);
+        try {
+            await database.setSetting('card_number', cardNum);
+            await database.setSetting('card_holder', cardHolder);
+            console.log('Card saved successfully');
+        } catch (error) {
+            console.error('Error saving card:', error);
+            return ctx.reply('❌ Karta saqlashda xatolik yuz berdi.');
+        }
 
-        ctx.session.state = null;
+        // Clear session state safely
+        if (ctx.session) {
+            ctx.session.state = null;
+        }
+        
         await ctx.reply(`✅ Karta muvaffaqiyatli saqlandi:\n\n💳 Karta: \`${cardNum}\`\n👤 Ega: \`${cardHolder}\``, { parse_mode: 'Markdown', ...this.adminMenu });
     }
 
