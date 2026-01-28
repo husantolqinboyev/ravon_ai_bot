@@ -269,6 +269,17 @@ const updateBotDescription = async () => {
     }
 };
 
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't exit the process, just log the error
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    // Don't exit the process, just log the error
+});
+
 // Start bot with retry logic
 const startBot = async (retries = 5) => {
     // Start dummy HTTP server for Render before launching bot
@@ -328,13 +339,18 @@ setInterval(updateBotDescription, 5 * 60 * 1000); // Update every 5 minutes
 
 // Keep-alive mechanism for Render free tier
 const RENDER_URL = 'https://ravon-ai-bot.onrender.com';
-setInterval(() => {
-    https.get(RENDER_URL, (res) => {
+const keepAlive = () => {
+    const req = https.get(RENDER_URL, (res) => {
         console.log(`ping: ${RENDER_URL} - Status: ${res.statusCode}`);
     }).on('error', (err) => {
         console.error(`ping error: ${err.message}`);
     });
-}, 10 * 60 * 1000); // Every 10 minutes (600,000 ms)
+    req.setTimeout(10000, () => {
+        req.destroy();
+        console.log('ping timeout');
+    });
+};
+setInterval(keepAlive, 10 * 60 * 1000); // Every 10 minutes (600,000 ms)
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
