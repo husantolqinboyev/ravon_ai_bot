@@ -15,27 +15,48 @@ class TtsService {
         const filePath = path.join(this.tempDir, fileName);
 
         try {
-            console.log(`Generating Google TTS: "${text.substring(0, 20)}..." Lang: ${lang}`);
-            await this.generateGoogleAudio(text, filePath, lang);
+            // Force English language regardless of input
+            console.log(`Generating Google TTS: "${text.substring(0, 20)}..." Lang: en (forced)`);
+            
+            await this.generateGoogleAudio(text, filePath, 'en');
             return filePath;
         } catch (error) {
             console.error('Google TTS generation error:', error.message);
-            throw error;
+            throw new Error(`TTS synthesis failed: ${error.message}`);
         }
     }
 
     async generateGoogleAudio(text, filePath, lang = 'en') {
         try {
-            if (text.length <= 200) {
-                const url = googleTTS.getAudioUrl(text, {
+            // Clean text for TTS
+            const cleanText = text.replace(/[^\w\s.,!?'-]/g, '').trim();
+            
+            if (!cleanText) {
+                throw new Error('No valid text for TTS generation');
+            }
+
+            if (cleanText.length <= 200) {
+                const url = googleTTS.getAudioUrl(cleanText, {
                     lang: lang,
                     slow: false,
                     host: 'https://translate.google.com',
                 });
-                const response = await axios.get(url, { responseType: 'arraybuffer' });
+                
+                const response = await axios.get(url, { 
+                    responseType: 'arraybuffer',
+                    timeout: 10000,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                });
+                
+                if (!response.data || response.data.length === 0) {
+                    throw new Error('Empty audio response from Google TTS');
+                }
+                
                 await fs.writeFile(filePath, Buffer.from(response.data));
             } else {
-                const results = googleTTS.getAllAudioUrls(text, {
+                const results = googleTTS.getAllAudioUrls(cleanText, {
                     lang: lang,
                     slow: false,
                     host: 'https://translate.google.com',
@@ -43,13 +64,67 @@ class TtsService {
                 
                 const buffers = [];
                 for (const result of results) {
-                    const response = await axios.get(result.url, { responseType: 'arraybuffer' });
+                    const response = await axios.get(result.url, { 
+                        responseType: 'arraybuffer',
+                        timeout: 10000,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }
+                    });
+                    
+                    if (!response.data || response.data.length === 0) {
+                        throw new Error('Empty audio response from Google TTS');
+                    }
+                    
                     buffers.push(Buffer.from(response.data));
                 }
+                
+                if (buffers.length === 0) {
+                    throw new Error('No audio data generated');
+                }
+                
                 await fs.writeFile(filePath, Buffer.concat(buffers));
             }
         } catch (error) {
             throw new Error(`Google TTS synthesis failed: ${error.message}`);
+        }
+    }
+
+    async generateFallbackAudio(text, filePath, lang = 'en') {
+        try {
+            // Use a different host or approach as fallback
+            const cleanText = text.replace(/[^\w\s.,!?'-]/g, '').trim();
+            
+            if (!cleanText) {
+                throw new Error('No valid text for fallback TTS');
+            }
+
+            const url = googleTTS.getAudioUrl(cleanText, {
+                lang: lang,
+                slow: false,
+                host: 'https://translate.google.com', // Try direct Google
+            });
+            
+            const response = await axios.get(url, { 
+                responseType: 'arraybuffer',
+                timeout: 15000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Referer': 'https://translate.google.com/'
+                }
+            });
+            
+            if (!response.data || response.data.length === 0) {
+                throw new Error('Fallback TTS failed: Empty response');
+            }
+            
+            await fs.writeFile(filePath, Buffer.from(response.data));
+        } catch (error) {
+            throw new Error(`Fallback TTS failed: ${error.message}`);
         }
     }
 
