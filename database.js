@@ -170,6 +170,35 @@ class Database {
              this.db.run('UPDATE users SET daily_limit = 10 WHERE is_teacher = 1 AND daily_limit = 3');
              
              console.log('Database tables and migrations initialized');
+             this.seedDefaultData();
+        });
+    }
+
+    async seedDefaultData() {
+        // Seed Default Tariffs
+        this.db.get('SELECT COUNT(*) as count FROM tariffs', (err, row) => {
+            if (!err && row && row.count === 0) {
+                console.log('Seeding default tariffs...');
+                const defaultTariffs = [
+                    { name: 'Haftalik', price: 15000, duration: 7, limit: 50, wordLimit: 50 },
+                    { name: 'Oylik', price: 32000, duration: 30, limit: 200, wordLimit: 80 },
+                    { name: 'Yillik', price: 300000, duration: 365, limit: 1000, wordLimit: 80 }
+                ];
+
+                defaultTariffs.forEach(t => {
+                    this.db.run('INSERT INTO tariffs (name, price, duration_days, limit_per_day, word_limit) VALUES (?, ?, ?, ?, ?)',
+                        [t.name, t.price, t.duration, t.limit, t.wordLimit]);
+                });
+            }
+        });
+
+        // Seed Default Card Settings
+        this.db.get('SELECT COUNT(*) as count FROM bot_settings WHERE key IN ("card_number", "card_holder")', (err, row) => {
+            if (!err && row && row.count === 0) {
+                console.log('Seeding default card settings...');
+                this.db.run('INSERT OR IGNORE INTO bot_settings (key, value) VALUES (?, ?)', ['card_number', '5614 6868 3029 9486']);
+                this.db.run('INSERT OR IGNORE INTO bot_settings (key, value) VALUES (?, ?)', ['card_holder', 'Sanatbek Hamidov']);
+            }
         });
     }
 
@@ -562,7 +591,7 @@ class Database {
     async getPendingPayments() {
         return new Promise((resolve, reject) => {
             const query = `
-                SELECT p.*, u.first_name, u.username, t.name as tariff_name, t.price 
+                SELECT p.*, u.first_name, u.username, t.name as tariff_name, t.price, t.word_limit
                 FROM payments p 
                 JOIN users u ON p.user_id = u.id 
                 JOIN tariffs t ON p.tariff_id = t.id 
@@ -578,7 +607,7 @@ class Database {
     async getPaymentById(id) {
         return new Promise((resolve, reject) => {
             const query = `
-                SELECT p.*, u.telegram_id, t.duration_days, t.limit_per_day 
+                SELECT p.*, u.telegram_id, t.duration_days, t.limit_per_day, t.word_limit
                 FROM payments p 
                 JOIN users u ON p.user_id = u.id 
                 JOIN tariffs t ON p.tariff_id = t.id 
@@ -624,7 +653,7 @@ class Database {
                     const until = new Date(row.premium_until);
                     if (until < new Date()) {
                         // Premium expired
-                            this.db.run('UPDATE users SET is_premium = 0, daily_limit = 3 WHERE telegram_id = ?', [telegramId]);
+                            this.db.run('UPDATE users SET is_premium = 0, daily_limit = 3, word_limit = 30 WHERE telegram_id = ?', [telegramId]);
                             resolve(false);
                     } else {
                         resolve(true);

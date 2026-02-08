@@ -541,7 +541,8 @@ class CommandHandler {
                 `Ism: ${firstName}\n` +
                 `ID: \`${user.telegram_id}\`\n` +
                 `Rol: ${user.is_admin ? 'Admin' : (isTeacher ? 'O\'qituvchi' : 'Talaba')}\n` +
-                `Limit: ${user.daily_limit}`;
+                `Limit: ${user.daily_limit}\n` +
+                `So'z limiti: ${user.word_limit || 30}`;
 
             const buttons = [
                 [Markup.button.callback(isTeacher ? '❌ O\'qituvchilikdan olish' : '👨‍🏫 O\'qituvchi etib tayinlash', `toggle_teacher_${targetId}_${isTeacher ? 0 : 1}`)],
@@ -1238,6 +1239,7 @@ class CommandHandler {
         }
 
         msg += `✅ Kunlik: ${user.used_today} / ${user.daily_limit}\n`;
+        msg += `📝 So'z limiti: ${user.word_limit || 30} so'z\n`;
         msg += `🎁 Bonus: ${referralInfo.bonus_limit}\n\n`;
         
         if (user.used_today >= user.daily_limit && referralInfo.bonus_limit <= 0) {

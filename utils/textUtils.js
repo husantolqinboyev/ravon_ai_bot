@@ -36,34 +36,37 @@ function getUserWordLimit(user) {
         premium: 500
     };
     
-    // If user has custom word_limit, use it
-    if (user.word_limit) {
-        return {
-            limit: user.word_limit,
-            type: 'custom'
-        };
-    }
-    
-    // Otherwise use default based on plan
+    // Determine base limit based on plan
+    let baseLimit = defaultLimits.free;
+    let planType = 'free';
+
     if (user.is_premium) {
-        return {
-            limit: defaultLimits.premium,
-            type: 'premium'
-        };
+        baseLimit = defaultLimits.premium;
+        planType = 'premium';
+    } else {
+        const totalDailyLimit = (user.daily_limit || 0) + (user.bonus_limit || 0);
+        if (totalDailyLimit > 3) {
+            baseLimit = defaultLimits.basic;
+            planType = 'basic';
+        }
     }
-    
-    // For free users, check if they have bonus limits
-    const totalLimit = user.daily_limit + user.bonus_limit;
-    if (totalLimit > 3) {
-        return {
-            limit: defaultLimits.basic,
-            type: 'basic'
-        };
+
+    // If user has a custom word_limit that is different from the default free limit (30),
+    // or if it's explicitly set higher than the base limit, use it.
+    if (user.word_limit && user.word_limit !== 30) {
+        // If the custom limit is higher than what the plan offers, use the custom one.
+        // Otherwise, if the plan offers more, use the plan's limit.
+        if (user.word_limit > baseLimit) {
+            return {
+                limit: user.word_limit,
+                type: 'custom'
+            };
+        }
     }
     
     return {
-        limit: defaultLimits.free,
-        type: 'free'
+        limit: baseLimit,
+        type: planType
     };
 }
 
