@@ -98,6 +98,34 @@ class Database {
                 total_tokens INTEGER,
                 request_type TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`,
+
+            `CREATE TABLE IF NOT EXISTS teacher_students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                teacher_id INTEGER,
+                student_id INTEGER,
+                assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'active', -- active, inactive
+                FOREIGN KEY (teacher_id) REFERENCES users (id),
+                FOREIGN KEY (student_id) REFERENCES users (id),
+                UNIQUE(teacher_id, student_id)
+            )`,
+
+            `CREATE TABLE IF NOT EXISTS student_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                teacher_id INTEGER,
+                student_id INTEGER,
+                task_text TEXT,
+                task_type TEXT DEFAULT 'pronunciation', -- pronunciation, text
+                difficulty TEXT DEFAULT 'medium',
+                due_date DATETIME,
+                status TEXT DEFAULT 'pending', -- pending, submitted, graded
+                assessment_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                submitted_at DATETIME,
+                FOREIGN KEY (teacher_id) REFERENCES users (id),
+                FOREIGN KEY (student_id) REFERENCES users (id),
+                FOREIGN KEY (assessment_id) REFERENCES assessments (id)
             )`
         ];
 
@@ -116,7 +144,8 @@ class Database {
             { table: 'assessments', column: 'type', type: 'TEXT' },
             { table: 'assessments', column: 'word_accuracy', type: 'REAL' },
             { table: 'users', column: 'word_limit', type: 'INTEGER DEFAULT 30' },
-            { table: 'tariffs', column: 'word_limit', type: 'INTEGER DEFAULT 30' }
+            { table: 'tariffs', column: 'word_limit', type: 'INTEGER DEFAULT 30' },
+            { table: 'student_tasks', column: 'assessment_id', type: 'INTEGER' }
         ];
 
         this.db.serialize(() => {
@@ -138,6 +167,7 @@ class Database {
              
              // 3. Update existing limits (one-time reduction)
              this.db.run('UPDATE users SET daily_limit = 3 WHERE daily_limit = 10 AND is_premium = 0');
+             this.db.run('UPDATE users SET daily_limit = 10 WHERE is_teacher = 1 AND daily_limit = 3');
              
              console.log('Database tables and migrations initialized');
         });
@@ -287,6 +317,21 @@ class Database {
     async getRandomTestWord() {
         return new Promise((resolve, reject) => {
             this.db.get('SELECT * FROM test_words ORDER BY RANDOM() LIMIT 1', (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+    }
+
+    async getRandomTestWordByType(type) {
+        // type: 'word' or 'text'
+        // 'word' is <= 2 words, 'text' is > 2 words
+        const condition = type === 'word' ? 
+            "(LENGTH(word) - LENGTH(REPLACE(word, ' ', ''))) < 2" : 
+            "(LENGTH(word) - LENGTH(REPLACE(word, ' ', ''))) >= 2";
+            
+        return new Promise((resolve, reject) => {
+            this.db.get(`SELECT * FROM test_words WHERE ${condition} ORDER BY RANDOM() LIMIT 1`, (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -722,13 +767,206 @@ class Database {
     async getMonthlyUsers() {
         return new Promise((resolve, reject) => {
             const query = `
-                SELECT COUNT(*) as monthly_users 
+                SELECT COUNT(*) as total 
                 FROM users 
-                WHERE last_active >= datetime('now', '-30 days')
+                WHERE created_at >= datetime('now', '-1 month')
             `;
             this.db.get(query, (err, row) => {
                 if (err) reject(err);
-                else resolve(row ? row.monthly_users : 0);
+                else resolve(row ? row.total : 0);
+            });
+        });
+    }
+
+    // Teacher-Student Relationship Methods
+    async assignStudentToTeacher(teacherId, studentId) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                INSERT OR REPLACE INTO teacher_students (teacher_id, student_id, status)
+                VALUES (?, ?, 'active')
+            `;
+            this.db.run(query, [teacherId, studentId], function(err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+            });
+        });
+    }
+
+    async getTeacherStudents(teacherId) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                SELECT u.id, u.telegram_id, u.first_name, u.username, ts.assigned_at, ts.status
+                FROM users u
+                JOIN teacher_students ts ON u.id = ts.student_id
+                WHERE (ts.teacher_id = ? OR ts.teacher_id = (SELECT id FROM users WHERE telegram_id = ?)) AND ts.status = 'active'
+                ORDER BY ts.assigned_at DESC
+            `;
+            this.db.all(query, [teacherId, teacherId], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+    }
+
+    async getStudentTeachers(studentId) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                SELECT u.id, u.telegram_id, u.first_name, u.username, ts.assigned_at
+                FROM users u
+                JOIN teacher_students ts ON u.id = ts.teacher_id
+                WHERE (ts.student_id = ? OR ts.student_id = (SELECT id FROM users WHERE telegram_id = ?)) AND ts.status = 'active'
+            `;
+            this.db.all(query, [studentId, studentId], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+    }
+
+    async removeStudentFromTeacher(teacherId, studentId) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                UPDATE teacher_students 
+                SET status = 'inactive' 
+                WHERE (teacher_id = ? OR teacher_id = (SELECT id FROM users WHERE telegram_id = ?)) 
+                AND (student_id = ? OR student_id = (SELECT id FROM users WHERE telegram_id = ?))
+            `;
+            this.db.run(query, [teacherId, teacherId, studentId, studentId], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+    }
+
+    // Student Task Methods
+    async createTask(teacherId, studentId, taskText, taskType = 'pronunciation', difficulty = 'medium', dueDate = null) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                INSERT INTO student_tasks (teacher_id, student_id, task_text, task_type, difficulty, due_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `;
+            this.db.run(query, [teacherId, studentId, taskText, taskType, difficulty, dueDate], function(err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+            });
+        });
+    }
+
+    async getStudentTasks(studentId, status = null) {
+        return new Promise((resolve, reject) => {
+            let query = `
+                SELECT st.*, u.first_name as teacher_name, u.username as teacher_username, a.overall_score
+                FROM student_tasks st
+                JOIN users u ON (st.teacher_id = u.id OR st.teacher_id = u.telegram_id)
+                LEFT JOIN assessments a ON st.assessment_id = a.id
+                WHERE (st.student_id = ? OR st.student_id = (SELECT id FROM users WHERE telegram_id = ?))
+            `;
+            const params = [studentId, studentId];
+            
+            if (status) {
+                query += ' AND st.status = ?';
+                params.push(status);
+            }
+            
+            query += ' ORDER BY st.created_at DESC';
+            
+            this.db.all(query, params, (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+    }
+
+    async getTeacherTasks(teacherId, status = null) {
+        return new Promise((resolve, reject) => {
+            let query = `
+                SELECT st.*, u.first_name as student_name, u.username as student_username, a.overall_score
+                FROM student_tasks st
+                JOIN users u ON st.student_id = u.id
+                LEFT JOIN assessments a ON st.assessment_id = a.id
+                WHERE (st.teacher_id = ? OR st.teacher_id = (SELECT id FROM users WHERE telegram_id = ?))
+            `;
+            const params = [teacherId, teacherId];
+            
+            if (status) {
+                query += ' AND st.status = ?';
+                params.push(status);
+            }
+            
+            query += ' ORDER BY st.created_at DESC';
+            
+            this.db.all(query, params, (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+    }
+
+    async getTaskById(taskId) {
+        return new Promise((resolve, reject) => {
+            console.log('getTaskById called with taskId:', taskId);
+            const query = `
+                SELECT st.*, u.first_name as teacher_name, u.username as teacher_username, u.telegram_id as teacher_telegram_id, a.overall_score
+                FROM student_tasks st
+                JOIN users u ON (st.teacher_id = u.id OR st.teacher_id = u.telegram_id)
+                LEFT JOIN assessments a ON st.assessment_id = a.id
+                WHERE st.id = ?
+            `;
+            
+            console.log('Executing query:', query);
+            console.log('With params:', [taskId]);
+            
+            this.db.get(query, [taskId], (err, row) => {
+                if (err) {
+                    console.error('Database error in getTaskById:', err);
+                    reject(err);
+                } else {
+                    console.log('Query result:', row);
+                    resolve(row || null);
+                }
+            });
+        });
+    }
+
+    async submitTask(taskId, assessmentId) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                UPDATE student_tasks 
+                SET status = 'submitted', 
+                    submitted_at = CURRENT_TIMESTAMP,
+                    assessment_id = ?
+                WHERE id = ?
+            `;
+            this.db.run(query, [assessmentId, taskId], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+    }
+
+    async gradeTask(taskId, status = 'graded') {
+        return new Promise((resolve, reject) => {
+            const query = `
+                UPDATE student_tasks 
+                SET status = ?
+                WHERE id = ?
+            `;
+            this.db.run(query, [status, taskId], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+    }
+
+    async deleteTask(taskId, teacherId) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                DELETE FROM student_tasks 
+                WHERE id = ? AND (teacher_id = ? OR teacher_id = (SELECT id FROM users WHERE telegram_id = ?))
+            `;
+            this.db.run(query, [taskId, teacherId, teacherId], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes);
             });
         });
     }

@@ -32,6 +32,9 @@ class AudioHandler {
             const state = ctx.session?.state;
             let type = 'general';
             let targetText = null;
+            let taskId = null;
+
+            let task = null;
 
             if (state === 'waiting_for_test_audio') {
                 type = 'test';
@@ -39,12 +42,22 @@ class AudioHandler {
             } else if (state === 'waiting_for_compare_audio') {
                 type = 'compare';
                 targetText = ctx.session.compareText;
+            } else if (state === 'completing_task') {
+                type = 'task';
+                taskId = ctx.session.currentTaskId;
+                // Get task details for target text
+                task = await database.getTaskById(taskId);
+                if (task) {
+                    targetText = task.task_text;
+                }
             }
             
             // Send processing message
             let processingText = "Audio qabul qilindi! Tahlil qilinmoqda... ⏳";
             if (state === 'waiting_for_compare_audio') {
                 processingText = "Yaxshi, endi sizga talaffuzingizni tahlil qilib beraman... ⏳";
+            } else if (state === 'completing_task') {
+                processingText = "Topshiriq uchun audio qabul qilindi! Tahlil qilinmoqda... ⏳";
             }
             const processingMsg = await ctx.reply(processingText);
             
@@ -114,6 +127,44 @@ class AudioHandler {
                 delete ctx.session.state;
                 delete ctx.session.testWord;
                 delete ctx.session.compareText;
+                
+                // Handle task completion
+                if (type === 'task' && taskId) {
+                    try {
+                        await database.submitTask(taskId, result.data.assessmentId || null);
+                        
+                        // Notify teacher if task details are available
+                        if (task && task.teacher_telegram_id) {
+                             try {
+                                 const studentName = ctx.from.first_name || ctx.from.username || "O'quvchi";
+                                 const score = result.data?.overallScore || result.data?.overall_score || 0;
+                                 
+                                 let teacherMsg = `🔔 *Yangi topshiriq topshirildi!*\n\n` +
+                                    `👤 *O'quvchi:* ${studentName}\n` +
+                                    `📝 *Topshiriq:* "${task.task_text}"\n` +
+                                    `📊 *Natija:* ${score} ball\n\n` +
+                                    `Tekshirish uchun o'qituvchi paneliga kiring.`;
+
+                                await ctx.telegram.sendMessage(task.teacher_telegram_id, teacherMsg, { parse_mode: 'Markdown' });
+                            } catch (notifyError) {
+                                console.error('Teacher notification error:', notifyError);
+                            }
+                        }
+
+                        // Send task completion message
+                        await ctx.reply(
+                            "✅ *Topshiriq muvaffaqiyatli topshirildi!*\n\n" +
+                            "👨‍🏫 O'qituvchingiz natijalaringizni ko'rib chiqadi.\n" +
+                            "📊 Boshqa topshiriqlar uchun '📊 Mening natijalarim' bo'limiga qayting.",
+                            { parse_mode: 'Markdown' }
+                        );
+                        
+                        delete ctx.session.currentTaskId;
+                    } catch (taskError) {
+                        console.error('Task submission error:', taskError);
+                        await ctx.reply("⚠️ Topshiriqni topshirishda xatolik yuz berdi, ammo tahlil saqlandi.");
+                    }
+                }
             }
             
         } catch (error) {

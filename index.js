@@ -92,6 +92,7 @@ bot.command('teacher', (ctx) => commandHandler.handleTeacher(ctx));
 
 // Main Menu Handlers
 bot.hears('🎯 Talaffuzni test qilish', (ctx) => commandHandler.handleTestPronunciation(ctx));
+bot.hears('🎲 Tasodifiy', (ctx) => commandHandler.handleRandomMenu(ctx));
 bot.hears('📝 Matn va Audio', (ctx) => commandHandler.handleCompareTextAudio(ctx));
 bot.hears('🔊 Matnni audyoga o\'tkazish', (ctx) => commandHandler.handleTextToAudio(ctx));
 bot.hears('📊 Mening natijalarim', (ctx) => commandHandler.handleStats(ctx));
@@ -105,6 +106,12 @@ bot.hears('🔙 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 // Admin & Teacher Panel Handlers
 bot.hears('👥 Foydalanuvchilar', (ctx) => commandHandler.handleUsers(ctx));
 bot.hears(['➕ Test so\'zi qo\'shish', '➕ Matn qo\'shish'], (ctx) => commandHandler.handleTestWord(ctx));
+bot.hears('👥 O\'quvchilarim', (ctx) => commandHandler.handleMyStudents(ctx));
+bot.hears('➕ Topshiriq berish', (ctx) => commandHandler.handleMyStudents(ctx));
+bot.hears('📋 Topshiriqlarim', (ctx) => commandHandler.handleMyTasks(ctx));
+bot.hears('📊 Natijalar', (ctx) => commandHandler.handleUserResults(ctx));
+bot.hears('🤖 AI matn yaratish', (ctx) => commandHandler.handleAiTextGeneration(ctx));
+bot.hears('🤖 AI so\'z yaratish', (ctx) => commandHandler.handleAiWordGeneration(ctx));
 bot.hears('📚 Matnlar ro\'yxati', (ctx) => commandHandler.handleManageTexts(ctx));
 bot.hears('📊 Umumiy statistika', (ctx) => commandHandler.handleAdminStats(ctx));
 bot.hears('📋 Oxirgi natijalar', (ctx) => commandHandler.handleUserResults(ctx));
@@ -134,6 +141,27 @@ bot.action(/add_limit_(\d+)_(\d+)/, (ctx) => commandHandler.handleAddLimit(ctx))
 bot.action('admin_users_list', (ctx) => commandHandler.handleUsers(ctx));
 bot.action('show_referral_info', (ctx) => commandHandler.handleReferral(ctx));
 
+// AI Generation actions
+bot.action(/ai_generate_(easy|medium|hard)_(word|sentence|text)/, (ctx) => commandHandler.handleAiGenerate(ctx));
+bot.action('back_to_teacher_menu', (ctx) => commandHandler.handleTeacher(ctx));
+
+// Student management actions
+bot.action(/assign_task_(\d+)/, (ctx) => commandHandler.handleAssignTask(ctx));
+bot.action(/remove_student_(\d+)/, (ctx) => commandHandler.handleRemoveStudent(ctx));
+bot.action('assign_student_menu', (ctx) => commandHandler.handleAssignStudentMenu(ctx));
+bot.action('assign_user_menu', (ctx) => commandHandler.handleAssignUserMenu(ctx));
+bot.action('show_user_selection_for_assignment', (ctx) => commandHandler.handleUserSelectionForAssignment(ctx));
+bot.action(/select_user_for_student_(\d+)/, (ctx) => commandHandler.handleUserSelectionForAssignmentCallback(ctx));
+bot.action(/confirm_remove_(\d+)/, (ctx) => commandHandler.handleConfirmRemoveStudent(ctx));
+bot.action('cancel_remove', (ctx) => commandHandler.handleCancelRemoveStudent(ctx));
+
+// Task interaction actions
+bot.action(/start_task_(\d+)/, (ctx) => commandHandler.handleStartTask(ctx));
+bot.action(/view_task_(\d+)/, (ctx) => commandHandler.handleViewTask(ctx));
+bot.action('back_to_stats', (ctx) => commandHandler.handleStats(ctx));
+bot.action('cancel_task', (ctx) => commandHandler.handleCancelTask(ctx));
+bot.action('view_my_tasks', (ctx) => commandHandler.handleStats(ctx));
+
 // Help command
 bot.help((ctx) => commandHandler.handleHelp(ctx));
 
@@ -143,6 +171,7 @@ bot.action('download_pdf_report', (ctx) => commandHandler.handleDownloadPdfRepor
 bot.action(/play_correct_/, (ctx) => commandHandler.handlePlayCorrect(ctx));
 bot.action('listen_test_text', (ctx) => commandHandler.handleListenTestText(ctx));
 bot.action('confirm_test_reading', (ctx) => commandHandler.handleConfirmTestReading(ctx));
+bot.action(/random_(word|text)/, (ctx) => commandHandler.handleRandomStart(ctx));
 bot.action(/start_test_(\d+)/, (ctx) => commandHandler.handleStartTestById(ctx));
 bot.action('test_pronunciation_list', (ctx) => commandHandler.handleTestPronunciationList(ctx));
 bot.action(/delete_text_(\d+)/, (ctx) => commandHandler.handleDeleteText(ctx));
@@ -163,10 +192,18 @@ bot.on('text', async (ctx, next) => {
     if (ctx.session?.state === 'waiting_for_tariff_info') {
         return commandHandler.handleAddTariff(ctx);
     }
+
+    if (ctx.session?.state === 'waiting_for_task_text') {
+        return commandHandler.handleTaskTextProcessing(ctx);
+    }
+
+    if (ctx.session?.state === 'waiting_for_student_assignment') {
+        return commandHandler.handleStudentAssignmentProcessing(ctx);
+    }
     
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
     const menuButtons = [
-        '🎯 Talaffuzni test qilish', '📝 Matn va Audio', '🔊 Matnni audyoga o\'tkazish',
+        '🎯 Talaffuzni test qilish', '🎲 Tasodifiy', '📝 Matn va Audio', '🔊 Matnni audyoga o\'tkazish',
         '📊 Mening natijalarim', '📊 Limitim', '👤 Profil', '🔗 Referal', '💎 Premium',
         '🏠 Asosiy menyu', '🔙 Asosiy menyu'
     ];

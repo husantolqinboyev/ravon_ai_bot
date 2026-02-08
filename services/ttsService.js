@@ -8,6 +8,36 @@ class TtsService {
     constructor() {
         this.tempDir = path.join(__dirname, '../temp/tts');
         fs.ensureDirSync(this.tempDir);
+        
+        // Start automatic cleanup every hour
+        this.startAutoCleanup();
+    }
+
+    startAutoCleanup() {
+        // Run every hour
+        setInterval(() => this.cleanupOldFiles(), 60 * 60 * 1000);
+        // Also run once on startup
+        setTimeout(() => this.cleanupOldFiles(), 5000);
+    }
+
+    async cleanupOldFiles() {
+        try {
+            const files = await fs.readdir(this.tempDir);
+            const now = Date.now();
+            const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+            for (const file of files) {
+                const filePath = path.join(this.tempDir, file);
+                const stats = await fs.stat(filePath);
+                
+                if (now - stats.mtimeMs > maxAge) {
+                    await fs.remove(filePath);
+                    console.log(`Auto-cleaned old TTS file: ${file}`);
+                }
+            }
+        } catch (error) {
+            console.error('Auto cleanup error:', error);
+        }
     }
 
     async generateAudio(text, lang = 'en') {
