@@ -94,7 +94,7 @@ bot.command('teacher', (ctx) => commandHandler.handleTeacher(ctx));
 bot.hears('🎯 Talaffuzni test qilish', (ctx) => commandHandler.handleTestPronunciation(ctx));
 bot.hears('🎲 Tasodifiy', (ctx) => commandHandler.handleRandomMenu(ctx));
 bot.hears('📝 Matn va Audio', (ctx) => commandHandler.handleCompareTextAudio(ctx));
-bot.hears('🔊 Matnni audyoga o\'tkazish', (ctx) => commandHandler.handleTextToAudio(ctx));
+bot.hears('🔊 Matnni audioga o\'tkazish', (ctx) => commandHandler.handleTextToAudio(ctx));
 bot.hears('📊 Mening natijalarim', (ctx) => commandHandler.handleStats(ctx));
 bot.hears('📊 Limitim', (ctx) => commandHandler.handleLimitInfo(ctx));
 bot.hears('👤 Profil', (ctx) => commandHandler.handleProfile(ctx));
@@ -203,7 +203,7 @@ bot.on('text', async (ctx, next) => {
     
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
     const menuButtons = [
-        '🎯 Talaffuzni test qilish', '🎲 Tasodifiy', '📝 Matn va Audio', '🔊 Matnni audyoga o\'tkazish',
+        '🎯 Talaffuzni test qilish', '🎲 Tasodifiy', '📝 Matn va Audio', '🔊 Matnni audioga o\'tkazish',
         '📊 Mening natijalarim', '📊 Limitim', '👤 Profil', '🔗 Referal', '💎 Premium',
         '🏠 Asosiy menyu', '🔙 Asosiy menyu'
     ];

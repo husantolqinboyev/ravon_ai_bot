@@ -414,7 +414,7 @@ class CommandHandler {
     async handleTextToAudio(ctx) {
         ctx.session = ctx.session || {};
         ctx.session.state = 'waiting_for_tts_text';
-        await ctx.reply('🔊 Matnni audyoga o\'tkazish!\n\nIltimos, audio qilinishi kerak bo\'lgan matnni yozib yuboring:');
+        await ctx.reply('🔊 Matnni audioga o\'tkazish!\n\nIltimos, audio qilinishi kerak bo\'lgan matnni yozib yuboring:');
     }
 
     async handleProfile(ctx) {
