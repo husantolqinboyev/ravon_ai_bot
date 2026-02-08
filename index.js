@@ -321,11 +321,26 @@ process.on('uncaughtException', (error) => {
 const startBot = async (retries = 5) => {
     // Start dummy HTTP server for Render before launching bot
     const PORT = process.env.PORT || 3000;
-    http.createServer((req, res) => {
+    const server = http.createServer((req, res) => {
+        if (req.url === '/ping') {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('pong\n');
+            return;
+        }
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('Bot is running\n');
     }).listen(PORT, '0.0.0.0', () => {
         console.log(`📡 Health check server listening on port ${PORT}`);
+        
+        // Start self-pinging to keep the service awake on Render
+        const APP_URL = 'https://ravon-ai-bot-7xh1.onrender.com';
+        setInterval(() => {
+            https.get(`${APP_URL}/ping`, (res) => {
+                console.log(`Self-ping sent to ${APP_URL}/ping. Status: ${res.statusCode}`);
+            }).on('error', (err) => {
+                console.error('Self-ping error:', err.message);
+            });
+        }, 12 * 60 * 1000); // Ping every 14 minutes (Render free tier sleeps after 15m)
     });
 
     // Force polling mode to avoid webhook conflicts
