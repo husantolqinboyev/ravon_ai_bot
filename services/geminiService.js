@@ -218,6 +218,14 @@ class GeminiService {
                 }
             }
 
+            // For word type, ensure it's truly a single word
+            if (type === 'word') {
+                const words = cleanText.split(/\s+/).filter(w => w.length > 0);
+                if (words.length > 0) {
+                    return words[0]; // Take only the first word if AI returned more
+                }
+            }
+
             return cleanText;
         } catch (error) {
             console.error("AI text generation error:", error.message);

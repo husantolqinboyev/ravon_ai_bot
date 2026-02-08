@@ -16,7 +16,7 @@ Ushbu loyiha foydalanuvchilarning ingliz tili talaffuzini sun'iy intellekt yorda
 
 *   **Node.js & Telegraf:** Botning asosi va Telegram API bilan ishlash uchun.
 *   **Google Gemini AI API:** Audioni tahlil qilish, transkripsiya va talaffuz xatolarini aniqlash uchun.
-*   **Edge TTS (Microsoft):** Matnni audyoga o'girish (Text-to-Speech) va to'g'ri talaffuz namunalarini yaratish uchun.
+*   **Edge TTS (Microsoft):** Matnni audioga o'girish (Text-to-Speech) va to'g'ri talaffuz namunalarini yaratish uchun.
 *   **SQLite3:** Foydalanuvchilar ma'lumotlari, limitlar, referal tizimi va natijalarni saqlash uchun (Local database).
 *   **PDFKit:** Professional tahlil hisobotlarini PDF formatida yaratish uchun.
 
