@@ -12,7 +12,7 @@ class CommandHandler {
     constructor() {
         this.mainMenu = Markup.keyboard([
             ['🎯 Talaffuzni test qilish', '🎲 Tasodifiy'],
-            ['📝 Matn va Audio', '🔊 Matnni audyoga o\'tkazish'],
+            ['📝 Matn va Audio', '🔊 Matnni audioga o\'tkazish'],
             ['📊 Mening natijalarim', '📊 Limitim'],
             ['👤 Profil', '🔗 Referal', '💎 Premium']
         ]).resize();
