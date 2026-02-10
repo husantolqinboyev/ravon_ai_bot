@@ -1225,7 +1225,18 @@ class CommandHandler {
     }
 
     async handleLimitInfo(ctx) {
-        const user = await database.getUserByTelegramId(ctx.from.id);
+        let user = await database.getUserByTelegramId(ctx.from.id);
+        
+        // If user not in DB, try to save them first
+        if (!user) {
+            await database.saveUser(ctx.from);
+            user = await database.getUserByTelegramId(ctx.from.id);
+        }
+
+        if (!user) {
+            return ctx.reply("❌ Foydalanuvchi ma'lumotlarini yuklashda xatolik yuz berdi. Iltimos, /start buyrug'ini qaytadan bosing.");
+        }
+
         const referralInfo = await database.getReferralInfo(ctx.from.id);
         
         let msg = `📊 *Sizning limitingiz:*\n\n`;

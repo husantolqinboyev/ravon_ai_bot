@@ -13,6 +13,23 @@ const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
 // Middleware
 bot.use(session());
 
+// Ensure session exists
+bot.use(async (ctx, next) => {
+    if (!ctx.session) ctx.session = {};
+    
+    // Ensure user exists in DB and attach to context
+    if (ctx.from && !ctx.from.is_bot) {
+        let user = await database.getUserByTelegramId(ctx.from.id);
+        if (!user) {
+            await database.saveUser(ctx.from);
+            user = await database.getUserByTelegramId(ctx.from.id);
+        }
+        ctx.state.user = user;
+    }
+    
+    return next();
+});
+
 // Channel Membership Middleware
 bot.use(async (ctx, next) => {
     // Skip check for certain update types or commands
@@ -387,22 +404,7 @@ startBot();
 
 // Update bot description periodically
 updateBotDescription(); // Update immediately on start
-setInterval(updateBotDescription, 5 * 60 * 1000); // Update every 5 minutes
-
-// Keep-alive mechanism for Render free tier
-const RENDER_URL = 'https://ravon-ai-bot.onrender.com';
-const keepAlive = () => {
-    const req = https.get(RENDER_URL, (res) => {
-        console.log(`ping: ${RENDER_URL} - Status: ${res.statusCode}`);
-    }).on('error', (err) => {
-        console.error(`ping error: ${err.message}`);
-    });
-    req.setTimeout(10000, () => {
-        req.destroy();
-        console.log('ping timeout');
-    });
-};
-setInterval(keepAlive, 10 * 60 * 1000); // Every 10 minutes (600,000 ms)
+setInterval(updateBotDescription, 60 * 60 * 1000); // Update every 1 hour (was 5 min)
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
