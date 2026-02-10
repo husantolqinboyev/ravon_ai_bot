@@ -65,6 +65,11 @@ class AudioHandler {
             const fileLink = await ctx.telegram.getFileLink(fileId);
             const audioBuffer = await this.downloadAudio(fileLink.href);
             
+            if (!audioBuffer || audioBuffer.length === 0) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => {});
+                return ctx.reply("❌ Audioni yuklab olishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
+            }
+
             // Process audio
             const result = await assessmentService.processAudio(
                 ctx.from,
@@ -74,9 +79,17 @@ class AudioHandler {
                 type,
                 targetText
             );
+
+            if (!result || !result.success) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => {});
+                const errorMsg = result?.error === 'LIMIT_EXCEEDED' 
+                    ? "⚠️ Kunlik limitingiz tugagan. Iltimos, keyinroq urinib ko'ring yoki Premium oling."
+                    : "❌ Audio tahlilida xatolik yuz berdi. Iltimos, qayta urinib ko'ring.";
+                return ctx.reply(errorMsg);
+            }
             
             // Delete processing message and send result
-            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id);
+            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => {});
             
             // Store assessment data in session for PDF generation
             if (!ctx.session) {

@@ -61,6 +61,14 @@ function getUserWordLimit(user) {
                 limit: user.word_limit,
                 type: 'custom'
             };
+        } else if (user.is_premium) {
+            // For premium users, if their custom word_limit is lower than baseLimit (500),
+            // but they are premium, we should still respect the custom word_limit 
+            // because it might be the specific limit of their purchased tariff (e.g., 200).
+            return {
+                limit: user.word_limit,
+                type: 'premium_custom'
+            };
         }
     }
     

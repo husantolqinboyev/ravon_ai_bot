@@ -52,6 +52,7 @@ class AssessmentService {
             // Step 3: Format response
             const formattedResponse = this.formatAssessmentResponse(assessment, type);
             return {
+                success: true,
                 text: formattedResponse,
                 data: {
                     ...assessment,
@@ -61,7 +62,10 @@ class AssessmentService {
             
         } catch (error) {
             console.error('Assessment processing error:', error);
-            throw error;
+            return {
+                success: false,
+                error: error.message
+            };
         }
     }
 
