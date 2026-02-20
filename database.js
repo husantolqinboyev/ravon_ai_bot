@@ -1,232 +1,141 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 const config = require('./config');
 
 class Database {
     constructor() {
-        this.db = new sqlite3.Database(path.join(__dirname, 'bot.db'), (err) => {
-            if (err) {
-                console.error('Database connection error:', err);
-            } else {
-                console.log('Connected to SQLite database');
-                this.initializeTables();
+        // Initialize Supabase client
+        this.supabase = createClient(
+            config.SUPABASE_URL,
+            config.SUPABASE_ANON_KEY,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
             }
-        });
+        );
+
+        // Service client for admin operations
+        this.supabaseAdmin = createClient(
+            config.SUPABASE_URL,
+            config.SUPABASE_SERVICE_KEY,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
+            }
+        );
+
+        console.log('Connected to Supabase database');
+
+        // Cache for leaderboard
+        this.leaderboardCache = null;
+        this.leaderboardLastUpdate = 0;
+        this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
     }
 
-    initializeTables() {
-        const tableQueries = [
-            `CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                telegram_id INTEGER UNIQUE,
-                username TEXT,
-                first_name TEXT,
-                last_name TEXT,
-                language_code TEXT,
-                is_admin INTEGER DEFAULT 0,
-                is_teacher INTEGER DEFAULT 0,
-                is_premium INTEGER DEFAULT 0,
-                premium_until DATETIME,
-                daily_limit INTEGER DEFAULT 3,
-                used_today INTEGER DEFAULT 0,
-                bonus_limit INTEGER DEFAULT 0,
-                tts_voice TEXT DEFAULT 'en-US-AriaNeural',
-                last_active DATETIME DEFAULT CURRENT_TIMESTAMP,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                referred_by INTEGER,
-                referral_count INTEGER DEFAULT 0
-            )`,
-            
-            `CREATE TABLE IF NOT EXISTS assessments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                type TEXT,
-                audio_duration REAL,
-                overall_score REAL,
-                accuracy_score REAL,
-                fluency_score REAL,
-                completeness_score REAL,
-                prosody_score REAL,
-                word_accuracy REAL,
-                transcription TEXT,
-                target_text TEXT,
-                feedback TEXT,
-                english_level TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )`,
-
-            `CREATE TABLE IF NOT EXISTS test_words (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                word TEXT UNIQUE,
-                difficulty TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`,
-
-            `CREATE TABLE IF NOT EXISTS tariffs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT,
-                price INTEGER,
-                duration_days INTEGER,
-                limit_per_day INTEGER,
-                word_limit INTEGER DEFAULT 30,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`,
-
-            `CREATE TABLE IF NOT EXISTS payments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                tariff_id INTEGER,
-                photo_file_id TEXT,
-                payment_details TEXT,
-                status TEXT DEFAULT 'pending', -- pending, approved, rejected
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id),
-                FOREIGN KEY (tariff_id) REFERENCES tariffs (id)
-            )`,
-
-            `CREATE TABLE IF NOT EXISTS bot_settings (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )`,
-
-            `CREATE TABLE IF NOT EXISTS api_usage (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                model_name TEXT,
-                prompt_tokens INTEGER,
-                candidates_tokens INTEGER,
-                total_tokens INTEGER,
-                request_type TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`,
-
-            `CREATE TABLE IF NOT EXISTS teacher_students (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                teacher_id INTEGER,
-                student_id INTEGER,
-                assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                status TEXT DEFAULT 'active', -- active, inactive
-                FOREIGN KEY (teacher_id) REFERENCES users (id),
-                FOREIGN KEY (student_id) REFERENCES users (id),
-                UNIQUE(teacher_id, student_id)
-            )`,
-
-            `CREATE TABLE IF NOT EXISTS student_tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                teacher_id INTEGER,
-                student_id INTEGER,
-                task_text TEXT,
-                task_type TEXT DEFAULT 'pronunciation', -- pronunciation, text
-                difficulty TEXT DEFAULT 'medium',
-                due_date DATETIME,
-                status TEXT DEFAULT 'pending', -- pending, submitted, graded
-                assessment_id INTEGER,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                submitted_at DATETIME,
-                FOREIGN KEY (teacher_id) REFERENCES users (id),
-                FOREIGN KEY (student_id) REFERENCES users (id),
-                FOREIGN KEY (assessment_id) REFERENCES assessments (id)
-            )`
-        ];
-
-        const migrationQueries = [
-            { table: 'users', column: 'is_premium', type: 'INTEGER DEFAULT 0' },
-            { table: 'users', column: 'premium_until', type: 'DATETIME' },
-            { table: 'users', column: 'is_admin', type: 'INTEGER DEFAULT 0' },
-            { table: 'users', column: 'is_teacher', type: 'INTEGER DEFAULT 0' },
-            { table: 'users', column: 'daily_limit', type: 'INTEGER DEFAULT 3' },
-            { table: 'users', column: 'used_today', type: 'INTEGER DEFAULT 0' },
-            { table: 'users', column: 'bonus_limit', type: 'INTEGER DEFAULT 0' },
-            { table: 'users', column: 'tts_voice', type: "TEXT DEFAULT 'en-US-AriaNeural'" },
-            { table: 'users', column: 'last_active', type: 'DATETIME DEFAULT CURRENT_TIMESTAMP' },
-            { table: 'users', column: 'referred_by', type: 'INTEGER' },
-            { table: 'users', column: 'referral_count', type: 'INTEGER DEFAULT 0' },
-            { table: 'assessments', column: 'type', type: 'TEXT' },
-            { table: 'assessments', column: 'word_accuracy', type: 'REAL' },
-            { table: 'users', column: 'word_limit', type: 'INTEGER DEFAULT 30' },
-            { table: 'tariffs', column: 'word_limit', type: 'INTEGER DEFAULT 30' },
-            { table: 'student_tasks', column: 'assessment_id', type: 'INTEGER' }
-        ];
-
-        this.db.serialize(() => {
-            // 1. Create tables sequentially
-            tableQueries.forEach(query => {
-                this.db.run(query, (err) => {
-                    if (err) console.error('Table creation error:', err);
-                });
-            });
-
-            // 2. Add missing columns sequentially
-             migrationQueries.forEach(m => {
-                 this.db.run(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`, (err) => {
-                     if (err && !err.message.includes('duplicate column name')) {
-                         console.error(`Migration error (${m.table}.${m.column}):`, err.message);
-                     }
-                 });
-             });
-             
-             // 3. Update existing limits (one-time reduction)
-             this.db.run('UPDATE users SET daily_limit = 3 WHERE daily_limit = 10 AND is_premium = 0');
-             this.db.run('UPDATE users SET daily_limit = 10 WHERE is_teacher = 1 AND daily_limit = 3');
-             
-             console.log('Database tables and migrations initialized');
-             this.seedDefaultData();
-        });
+    async initializeTables() {
+        // Tables are created via SQL schema in Supabase
+        console.log('Database tables initialized via SQL schema');
+        await this.seedDefaultData();
     }
 
     async seedDefaultData() {
-        // Seed Default Tariffs
-        this.db.get('SELECT COUNT(*) as count FROM tariffs', (err, row) => {
-            if (!err && row && row.count === 0) {
+        try {
+            // Check if tariffs exist
+            const { count: tariffCount } = await this.supabase
+                .from('tariffs')
+                .select('*', { count: 'exact', head: true });
+
+            if (tariffCount === 0) {
                 console.log('Seeding default tariffs...');
                 const defaultTariffs = [
-                    { name: 'Haftalik', price: 15000, duration: 7, limit: 50, wordLimit: 50 },
-                    { name: 'Oylik', price: 32000, duration: 30, limit: 200, wordLimit: 80 },
-                    { name: 'Yillik', price: 300000, duration: 365, limit: 1000, wordLimit: 80 }
+                    { name: 'Basic', price: 15000, duration_days: 7, limit_per_day: 50, word_limit: 70 },
+                    { name: 'Standart', price: 32000, duration_days: 30, limit_per_day: 200, word_limit: 150 },
+                    { name: 'Premium', price: 300000, duration_days: 365, limit_per_day: 1000, word_limit: 300 }
                 ];
 
-                defaultTariffs.forEach(t => {
-                    this.db.run('INSERT INTO tariffs (name, price, duration_days, limit_per_day, word_limit) VALUES (?, ?, ?, ?, ?)',
-                        [t.name, t.price, t.duration, t.limit, t.wordLimit]);
-                });
-            }
-        });
+                const { error } = await this.supabase
+                    .from('tariffs')
+                    .insert(defaultTariffs);
 
-        // Seed Default Card Settings
-        this.db.get('SELECT COUNT(*) as count FROM bot_settings WHERE key IN ("card_number", "card_holder")', (err, row) => {
-            if (!err && row && row.count === 0) {
-                console.log('Seeding default card settings...');
-                this.db.run('INSERT OR IGNORE INTO bot_settings (key, value) VALUES (?, ?)', ['card_number', '5614 6868 3029 9486']);
-                this.db.run('INSERT OR IGNORE INTO bot_settings (key, value) VALUES (?, ?)', ['card_holder', 'Sanatbek Hamidov']);
+                if (error) console.error('Error seeding tariffs:', error);
             }
-        });
+
+            // Check if bot settings exist
+            const { count: settingsCount } = await this.supabase
+                .from('bot_settings')
+                .select('*', { count: 'exact', head: true });
+
+            if (settingsCount === 0) {
+                console.log('Seeding default bot settings...');
+                const defaultSettings = [
+                    { key: 'card_number', value: '5614 6868 3029 9486' },
+                    { key: 'card_holder', value: 'Sanatbek Hamidov' }
+                ];
+
+                const { error } = await this.supabase
+                    .from('bot_settings')
+                    .insert(defaultSettings);
+
+                if (error) console.error('Error seeding settings:', error);
+            }
+        } catch (error) {
+            console.error('Error in seedDefaultData:', error);
+        }
     }
 
     async getUserLimitInfo(telegramId) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT used_today, daily_limit, bonus_limit FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { used_today: 0, daily_limit: 3, bonus_limit: 0 });
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('used_today, daily_limit, bonus_limit')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            return data || { used_today: 0, daily_limit: 3, bonus_limit: 0 };
+        } catch (error) {
+            console.error('Error getting user limit info:', error);
+            return { used_today: 0, daily_limit: 3, bonus_limit: 0 };
+        }
     }
 
     async getUserVoice(telegramId) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT tts_voice FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row ? row.tts_voice : 'en-US-AriaNeural');
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('tts_voice')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            return data ? data.tts_voice : 'en-US-AriaNeural';
+        } catch (error) {
+            console.error('Error getting user voice:', error);
+            return 'en-US-AriaNeural';
+        }
     }
 
     async setUserVoice(telegramId, voice) {
-        return new Promise((resolve, reject) => {
-            this.db.run('UPDATE users SET tts_voice = ? WHERE telegram_id = ?', [voice, telegramId], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('users')
+                .update({ tts_voice: voice })
+                .eq('telegram_id', telegramId);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error setting user voice:', error);
+            throw error;
+        }
     }
 
     async isAdmin(telegramId) {
@@ -234,12 +143,23 @@ class Database {
         if (config.ADMIN_IDS && config.ADMIN_IDS.includes(String(telegramId))) {
             return true;
         }
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT is_admin FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row ? row.is_admin === 1 : false);
-            });
-        });
+
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('is_admin')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            return data ? data.is_admin : false;
+        } catch (error) {
+            console.error('Error checking admin status:', error);
+            return false;
+        }
     }
 
     async isTeacher(telegramId) {
@@ -247,774 +167,1265 @@ class Database {
         const adminStatus = await this.isAdmin(telegramId);
         if (adminStatus) return true;
 
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT is_teacher FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row ? row.is_teacher === 1 : false);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('is_teacher')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            return data ? data.is_teacher : false;
+        } catch (error) {
+            console.error('Error checking teacher status:', error);
+            return false;
+        }
     }
 
     async setTeacher(telegramId, isTeacher) {
-        return new Promise((resolve, reject) => {
-            this.db.run('UPDATE users SET is_teacher = ? WHERE telegram_id = ?', [isTeacher ? 1 : 0, telegramId], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('users')
+                .update({ is_teacher: isTeacher })
+                .eq('telegram_id', telegramId);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error setting teacher status:', error);
+            throw error;
+        }
     }
 
     async setAdmin(telegramId, isAdmin) {
-        return new Promise((resolve, reject) => {
-            this.db.run('UPDATE users SET is_admin = ? WHERE telegram_id = ?', [isAdmin ? 1 : 0, telegramId], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('users')
+                .update({ is_admin: isAdmin })
+                .eq('telegram_id', telegramId);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error setting admin status:', error);
+            throw error;
+        }
     }
 
     async getAdminCount() {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT COUNT(*) as count FROM users WHERE is_admin = 1', (err, row) => {
-                if (err) reject(err);
-                else resolve(row.count);
-            });
-        });
+        try {
+            const { count, error } = await this.supabase
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .eq('is_admin', true);
+
+            if (error) throw error;
+            return count || 0;
+        } catch (error) {
+            console.error('Error getting admin count:', error);
+            return 0;
+        }
     }
 
     async checkLimit(telegramId) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT used_today, daily_limit, bonus_limit, last_active FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else {
-                    if (!row) return resolve(true);
-                    
-                    const lastActive = new Date(row.last_active);
-                    const today = new Date();
-                    
-                    // If last active was not today, reset used_today
-                    if (lastActive.toDateString() !== today.toDateString()) {
-                        this.db.run('UPDATE users SET used_today = 0 WHERE telegram_id = ?', [telegramId], (err) => {
-                            if (err) reject(err);
-                            else resolve(true);
-                        });
-                    } else {
-                        // Check if daily limit or bonus limit is available
-                        const hasDailyLimit = row.used_today < row.daily_limit;
-                        const hasBonusLimit = row.bonus_limit > 0;
-                        resolve(hasDailyLimit || hasBonusLimit);
-                    }
-                }
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('used_today, daily_limit, bonus_limit, last_active')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            if (!data) return true;
+
+            const lastActive = new Date(data.last_active);
+            const today = new Date();
+
+            // If last active was not today, reset used_today
+            if (lastActive.toDateString() !== today.toDateString()) {
+                await this.supabase
+                    .from('users')
+                    .update({ used_today: 0 })
+                    .eq('telegram_id', telegramId);
+                return true;
+            }
+
+            // Check if daily limit or bonus limit is available
+            const hasDailyLimit = data.used_today < data.daily_limit;
+            const hasBonusLimit = data.bonus_limit > 0;
+            return hasDailyLimit || hasBonusLimit;
+        } catch (error) {
+            console.error('Error checking limit:', error);
+            return true; // Allow on error
+        }
     }
 
     async incrementUsage(telegramId) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT used_today, daily_limit, bonus_limit FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) return reject(err);
-                if (!row) return resolve();
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('used_today, daily_limit, bonus_limit')
+                .eq('telegram_id', telegramId)
+                .single();
 
-                if (row.used_today < row.daily_limit) {
-                    // Use daily limit
-                    this.db.run('UPDATE users SET used_today = used_today + 1, last_active = CURRENT_TIMESTAMP WHERE telegram_id = ?', [telegramId], (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
-                } else if (row.bonus_limit > 0) {
-                    // Use bonus limit
-                    this.db.run('UPDATE users SET bonus_limit = bonus_limit - 1, last_active = CURRENT_TIMESTAMP WHERE telegram_id = ?', [telegramId], (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
-                } else {
-                    resolve();
-                }
-            });
-        });
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            if (!data) return;
+
+            let updateData = { last_active: new Date().toISOString() };
+
+            if (data.used_today < data.daily_limit) {
+                updateData.used_today = data.used_today + 1;
+            } else if (data.bonus_limit > 0) {
+                updateData.bonus_limit = data.bonus_limit - 1;
+            }
+
+            await this.supabase
+                .from('users')
+                .update(updateData)
+                .eq('telegram_id', telegramId);
+        } catch (error) {
+            console.error('Error incrementing usage:', error);
+            throw error;
+        }
     }
 
     async addTestWord(word, difficulty = 'medium') {
-        return new Promise((resolve, reject) => {
-            this.db.run('INSERT OR IGNORE INTO test_words (word, difficulty) VALUES (?, ?)', [word, difficulty], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('test_words')
+                .insert({ word, difficulty })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data.id;
+        } catch (error) {
+            console.error('Error adding test word:', error);
+            throw error;
+        }
     }
 
     async getRandomTestWord() {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT * FROM test_words ORDER BY RANDOM() LIMIT 1', (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        try {
+            // First get a random row by using RPC or getting count and offset
+            const { count, error: countError } = await this.supabase
+                .from('test_words')
+                .select('*', { count: 'exact', head: true });
+
+            if (countError) throw countError;
+            if (count === 0) return null;
+
+            const randomOffset = Math.floor(Math.random() * count);
+            const { data, error } = await this.supabase
+                .from('test_words')
+                .select('*')
+                .range(randomOffset, randomOffset)
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting random test word:', error);
+            return null;
+        }
     }
 
     async getRandomTestWordByType(type) {
-        // type: 'word' or 'text'
-        // 'word' is <= 2 words, 'text' is > 2 words
-        const condition = type === 'word' ? 
-            "(LENGTH(word) - LENGTH(REPLACE(word, ' ', ''))) < 2" : 
-            "(LENGTH(word) - LENGTH(REPLACE(word, ' ', ''))) >= 2";
-            
-        return new Promise((resolve, reject) => {
-            this.db.get(`SELECT * FROM test_words WHERE ${condition} ORDER BY RANDOM() LIMIT 1`, (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        try {
+            // Define filter logic
+            const isWord = type === 'word';
+
+            // First get count of filtered rows
+            let query = this.supabase.from('test_words').select('*', { count: 'exact', head: true });
+
+            if (isWord) {
+                // Word: either no space OR exactly 1 space (2 words max)
+                // Using a more reliable logic for Supabase: word should not have more than 1 space
+                // But for simplicity and matching the existing logic, we'll try to get all and filter if needed,
+                // OR use multiple ilike patterns.
+                query = query.or('word.not.ilike.% % %,word.not.ilike.% % % %');
+            } else {
+                // Text: must have at least 2 spaces (3 words or more)
+                query = query.ilike('word', '% % %');
+            }
+
+            const { count, error: countError } = await query;
+            if (countError) throw countError;
+            if (count === 0) return null;
+
+            // Get a random row from filtered results
+            const randomOffset = Math.floor(Math.random() * count);
+
+            let finalQuery = this.supabase.from('test_words').select('*');
+            if (isWord) {
+                finalQuery = finalQuery.or('word.not.ilike.% % %,word.not.ilike.% % % %');
+            } else {
+                finalQuery = finalQuery.ilike('word', '% % %');
+            }
+
+            const { data, error } = await finalQuery
+                .range(randomOffset, randomOffset)
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting random test word by type:', error);
+            return null;
+        }
     }
 
     async getRecentTestWords(limit = 20) {
-        return new Promise((resolve, reject) => {
-            this.db.all('SELECT * FROM test_words ORDER BY created_at DESC LIMIT ?', [limit], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('test_words')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting recent test words:', error);
+            return [];
+        }
     }
 
     async deleteTestWord(id) {
-        return new Promise((resolve, reject) => {
-            this.db.run('DELETE FROM test_words WHERE id = ?', [id], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('test_words')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error deleting test word:', error);
+            throw error;
+        }
     }
 
     async getAllUsers() {
-        return new Promise((resolve, reject) => {
-            this.db.all('SELECT * FROM users ORDER BY last_active DESC', (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('*')
+                .order('last_active', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting all users:', error);
+            return [];
+        }
     }
 
     async updateUserLimit(telegramId, limit) {
-        return new Promise((resolve, reject) => {
-            this.db.run('UPDATE users SET daily_limit = ? WHERE telegram_id = ?', [limit, telegramId], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('users')
+                .update({ daily_limit: limit })
+                .eq('telegram_id', telegramId);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error updating user limit:', error);
+            throw error;
+        }
     }
 
     async getUserByTelegramId(telegramId) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT * FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('*')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Error getting user by telegram ID:', error);
+            return null;
+        }
     }
 
     async saveUser(userData, referrerId = null) {
-        return new Promise((resolve, reject) => {
-            // Check if user exists first to preserve existing data like tts_voice and limits
-            this.db.get('SELECT id, referred_by FROM users WHERE telegram_id = ?', [userData.id], (err, row) => {
-                if (err) return reject(err);
-                
-                if (row) {
-                    // Update existing user
-                    const query = `
-                        UPDATE users 
-                        SET username = ?, first_name = ?, last_name = ?, language_code = ?, last_active = CURRENT_TIMESTAMP
-                        WHERE telegram_id = ?
-                    `;
-                    this.db.run(query, [
-                        userData.username,
-                        userData.first_name,
-                        userData.last_name,
-                        userData.language_code,
-                        userData.id
-                    ], function(err) {
-                        if (err) reject(err);
-                        else resolve(row.id);
-                    });
-                } else {
-                    // Insert new user with additional safety check
-                    // Double check if user doesn't exist to prevent race conditions
-                    this.db.get('SELECT id FROM users WHERE telegram_id = ?', [userData.id], (err, existingRow) => {
-                        if (err) return reject(err);
-                        
-                        if (existingRow) {
-                            // User was created by another process, return existing ID
-                            return resolve(existingRow.id);
-                        }
-                        
-                        // Safe to insert new user
-                        const query = `
-                            INSERT OR IGNORE INTO users 
-                            (telegram_id, username, first_name, last_name, language_code, referred_by) 
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        `;
-                        this.db.run(query, [
-                            userData.id,
-                            userData.username,
-                            userData.first_name,
-                            userData.last_name,
-                            userData.language_code,
-                            referrerId
-                        ], async (err) => {
-                            if (err) return reject(err);
-                            
-                            const newUserId = this.lastID;
-                            
-                            // If no rows were inserted (IGNORE), get the existing user
-                            if (newUserId === 0) {
-                                this.db.get('SELECT id FROM users WHERE telegram_id = ?', [userData.id], (err, row) => {
-                                    if (err) return reject(err);
-                                    if (row) return resolve(row.id);
-                                    return reject(new Error('Failed to create or find user'));
-                                });
-                                return;
-                            }
+        try {
+            // Check if user exists
+            const { data: existingUser, error: fetchError } = await this.supabase
+                .from('users')
+                .select('id, referred_by')
+                .eq('telegram_id', userData.id)
+                .single();
 
-                            // If there's a referrer, update their count and check for reward
-                            if (referrerId && String(referrerId) !== String(userData.id)) {
-                                // Anti-cheat: Check if referrer exists
-                                this.db.get('SELECT id FROM users WHERE telegram_id = ?', [referrerId], async (err, referrerRow) => {
-                                    if (!err && referrerRow) {
-                                        try {
-                                            await this.handleReferralReward(referrerId);
-                                        } catch (error) {
-                                            console.error('Referral reward error:', error);
-                                        }
-                                    }
-                                });
-                            }
+            if (fetchError && fetchError.code !== 'PGRST116') {
+                throw fetchError;
+            }
 
-                            resolve(newUserId);
-                        });
-                    });
+            if (existingUser) {
+                // Update existing user
+                const { error } = await this.supabase
+                    .from('users')
+                    .update({
+                        username: userData.username,
+                        first_name: userData.first_name,
+                        last_name: userData.last_name,
+                        language_code: userData.language_code,
+                        last_active: new Date().toISOString()
+                    })
+                    .eq('telegram_id', userData.id);
+
+                if (error) throw error;
+                return existingUser.id;
+            } else {
+                // Insert new user
+                const { data, error } = await this.supabase
+                    .from('users')
+                    .insert({
+                        telegram_id: userData.id,
+                        username: userData.username,
+                        first_name: userData.first_name,
+                        last_name: userData.last_name,
+                        language_code: userData.language_code,
+                        referred_by: referrerId
+                    })
+                    .select()
+                    .single();
+
+                if (error) throw error;
+
+                // Handle referral reward
+                if (referrerId && String(referrerId) !== String(userData.id)) {
+                    try {
+                        await this.handleReferralReward(referrerId);
+                    } catch (referralError) {
+                        console.error('Referral reward error:', referralError);
+                    }
                 }
-            });
-        });
+
+                return data.id;
+            }
+        } catch (error) {
+            console.error('Error saving user:', error);
+            throw error;
+        }
     }
 
     async handleReferralReward(referrerId) {
-        return new Promise((resolve, reject) => {
-            // 1. Increment referral count
-            this.db.run('UPDATE users SET referral_count = referral_count + 1 WHERE telegram_id = ?', [referrerId], (err) => {
-                if (err) return reject(err);
+        try {
+            // Get current referral count
+            const { data, error: fetchError } = await this.supabase
+                .from('users')
+                .select('referral_count, bonus_limit')
+                .eq('telegram_id', referrerId)
+                .single();
 
-                // 2. Check if count is a multiple of 3
-                this.db.get('SELECT referral_count FROM users WHERE telegram_id = ?', [referrerId], (err, row) => {
-                    if (err) return reject(err);
-                    
-                    if (row && row.referral_count > 0 && row.referral_count % 3 === 0) {
-                        // 3. Add 3 to bonus_limit (one-time bonus that doesn't reset)
-                        this.db.run('UPDATE users SET bonus_limit = bonus_limit + 3 WHERE telegram_id = ?', [referrerId], (err) => {
-                            if (err) return reject(err);
-                            resolve(true); // Reward given
-                        });
-                    } else {
-                        resolve(false); // No reward yet
-                    }
-                });
-            });
-        });
+            if (fetchError) throw fetchError;
+
+            const newCount = (data.referral_count || 0) + 1;
+            let newBonusLimit = data.bonus_limit || 0;
+
+            // Check if count is a multiple of 3
+            if (newCount > 0 && newCount % 3 === 0) {
+                newBonusLimit += 3;
+            }
+
+            // Update user
+            const { error: updateError } = await this.supabase
+                .from('users')
+                .update({
+                    referral_count: newCount,
+                    bonus_limit: newBonusLimit
+                })
+                .eq('telegram_id', referrerId);
+
+            if (updateError) throw updateError;
+            return true;
+        } catch (error) {
+            console.error('Error handling referral reward:', error);
+            throw error;
+        }
     }
 
     async getReferralInfo(telegramId) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT referral_count, daily_limit, bonus_limit FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { referral_count: 0, daily_limit: 3, bonus_limit: 0 });
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('referral_count, daily_limit, bonus_limit')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            return data || { referral_count: 0, daily_limit: 3, bonus_limit: 0 };
+        } catch (error) {
+            console.error('Error getting referral info:', error);
+            return { referral_count: 0, daily_limit: 3, bonus_limit: 0 };
+        }
     }
 
     // --- Settings Management ---
     async setSetting(key, value) {
-        return new Promise((resolve, reject) => {
-            this.db.run('INSERT OR REPLACE INTO bot_settings (key, value) VALUES (?, ?)', [key, value], (err) => {
-                if (err) reject(err);
-                else resolve(true);
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('bot_settings')
+                .upsert({ key, value });
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error setting setting:', error);
+            throw error;
+        }
     }
 
     async getSetting(key) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT value FROM bot_settings WHERE key = ?', [key], (err, row) => {
-                if (err) reject(err);
-                else resolve(row ? row.value : null);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('bot_settings')
+                .select('value')
+                .eq('key', key)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            return data ? data.value : null;
+        } catch (error) {
+            console.error('Error getting setting:', error);
+            return null;
+        }
     }
 
     // --- Tariff Management ---
     async addTariff(name, price, duration, limit, wordLimit = 30) {
-        return new Promise((resolve, reject) => {
-            this.db.run('INSERT INTO tariffs (name, price, duration_days, limit_per_day, word_limit) VALUES (?, ?, ?, ?, ?)', 
-                [name, price, duration, limit, wordLimit], (err) => {
-                if (err) reject(err);
-                else resolve(true);
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('tariffs')
+                .insert({
+                    name,
+                    price,
+                    duration_days: duration,
+                    limit_per_day: limit,
+                    word_limit: wordLimit
+                });
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error adding tariff:', error);
+            throw error;
+        }
     }
 
     async getTariffs() {
-        return new Promise((resolve, reject) => {
-            this.db.all('SELECT * FROM tariffs ORDER BY price ASC', (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('tariffs')
+                .select('*')
+                .order('price', { ascending: true });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting tariffs:', error);
+            return [];
+        }
     }
 
     async deleteTariff(id) {
-        return new Promise((resolve, reject) => {
-            this.db.run('DELETE FROM tariffs WHERE id = ?', [id], (err) => {
-                if (err) reject(err);
-                else resolve(true);
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('tariffs')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting tariff:', error);
+            throw error;
+        }
     }
 
     // --- Payment Management ---
     async createPaymentRequest(userId, tariffId, photoFileId, details) {
-        return new Promise((resolve, reject) => {
-            this.db.run('INSERT INTO payments (user_id, tariff_id, photo_file_id, payment_details) VALUES (?, ?, ?, ?)',
-                [userId, tariffId, photoFileId, details], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('payments')
+                .insert({
+                    user_id: userId,
+                    tariff_id: tariffId,
+                    photo_file_id: photoFileId,
+                    payment_details: details
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data.id;
+        } catch (error) {
+            console.error('Error creating payment request:', error);
+            throw error;
+        }
     }
 
     async getPendingPayments() {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT p.*, u.first_name, u.username, t.name as tariff_name, t.price, t.word_limit
-                FROM payments p 
-                JOIN users u ON p.user_id = u.id 
-                JOIN tariffs t ON p.tariff_id = t.id 
-                WHERE p.status = 'pending'
-            `;
-            this.db.all(query, (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('payments')
+                .select(`
+                    *,
+                    user:users!user_id(first_name, username),
+                    tariff:tariffs!tariff_id(name, price, word_limit)
+                `)
+                .eq('status', 'pending');
+
+            if (error) throw error;
+            return data.map(item => ({
+                ...item,
+                first_name: item.user?.first_name,
+                username: item.user?.username,
+                tariff_name: item.tariff?.name,
+                tariff_price: item.tariff?.price,
+                tariff_word_limit: item.tariff?.word_limit
+            })) || [];
+        } catch (error) {
+            console.error('Error getting pending payments:', error);
+            return [];
+        }
     }
 
     async getPaymentById(id) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT p.*, u.telegram_id, t.duration_days, t.limit_per_day, t.word_limit
-                FROM payments p 
-                JOIN users u ON p.user_id = u.id 
-                JOIN tariffs t ON p.tariff_id = t.id 
-                WHERE p.id = ?
-            `;
-            this.db.get(query, [id], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('payments')
+                .select(`
+                    *,
+                    user:users!user_id(telegram_id),
+                    tariff:tariffs!tariff_id(duration_days, limit_per_day, word_limit)
+                `)
+                .eq('id', id)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            if (data) {
+                return {
+                    ...data,
+                    telegram_id: data.user?.telegram_id,
+                    duration_days: data.tariff?.duration_days,
+                    limit_per_day: data.tariff?.limit_per_day,
+                    word_limit: data.tariff?.word_limit
+                };
+            }
+            return data;
+        } catch (error) {
+            console.error('Error getting payment by ID:', error);
+            return null;
+        }
     }
 
     async updatePaymentStatus(id, status) {
-        return new Promise((resolve, reject) => {
-            this.db.run('UPDATE payments SET status = ? WHERE id = ?', [status, id], (err) => {
-                if (err) reject(err);
-                else resolve(true);
-            });
-        });
+        try {
+            const { error } = await this.supabaseAdmin
+                .from('payments')
+                .update({ status })
+                .eq('id', id);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error updating payment status:', error);
+            throw error;
+        }
     }
 
     async approvePremium(userId, days, dailyLimit, wordLimit = 30) {
-        return new Promise((resolve, reject) => {
+        try {
             const until = new Date();
             until.setDate(until.getDate() + days);
-            const untilStr = until.toISOString();
 
-            this.db.run('UPDATE users SET is_premium = 1, premium_until = ?, daily_limit = ?, word_limit = ? WHERE id = ?',
-                [untilStr, dailyLimit, wordLimit, userId], (err) => {
-                if (err) reject(err);
-                else resolve(true);
-            });
-        });
+            const { error } = await this.supabaseAdmin
+                .from('users')
+                .update({
+                    is_premium: true,
+                    premium_until: until.toISOString(),
+                    daily_limit: dailyLimit,
+                    word_limit: wordLimit
+                })
+                .eq('id', userId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error approving premium:', error);
+            throw error;
+        }
     }
 
     async checkPremiumStatus(telegramId) {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT is_premium, premium_until FROM users WHERE telegram_id = ?', [telegramId], (err, row) => {
-                if (err) reject(err);
-                else {
-                    if (!row || !row.is_premium) return resolve(false);
-                    
-                    const until = new Date(row.premium_until);
-                    if (until < new Date()) {
-                        // Premium expired
-                            this.db.run('UPDATE users SET is_premium = 0, daily_limit = 3, word_limit = 30 WHERE telegram_id = ?', [telegramId]);
-                            resolve(false);
-                    } else {
-                        resolve(true);
-                    }
-                }
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('is_premium, premium_until')
+                .eq('telegram_id', telegramId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
+
+            if (!data || !data.is_premium) return false;
+
+            const until = new Date(data.premium_until);
+            if (until < new Date()) {
+                // Premium expired
+                await this.supabase
+                    .from('users')
+                    .update({
+                        is_premium: false,
+                        daily_limit: 3,
+                        word_limit: 30
+                    })
+                    .eq('telegram_id', telegramId);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error checking premium status:', error);
+            return false;
+        }
     }
 
     async getAdmins() {
-        return new Promise((resolve, reject) => {
-            this.db.all('SELECT telegram_id FROM users WHERE is_admin = 1', (err, rows) => {
-                if (err) reject(err);
-                else {
-                    let admins = rows || [];
-                    // Add admins from config if not already in the list
-                    if (config.ADMIN_IDS) {
-                        config.ADMIN_IDS.forEach(id => {
-                            if (!admins.find(a => String(a.telegram_id) === String(id))) {
-                                admins.push({ telegram_id: parseInt(id) });
-                            }
-                        });
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('telegram_id')
+                .eq('is_admin', true);
+
+            if (error) throw error;
+
+            let admins = data || [];
+            // Add admins from config if not already in the list
+            if (config.ADMIN_IDS) {
+                config.ADMIN_IDS.forEach(id => {
+                    if (!admins.find(a => String(a.telegram_id) === String(id))) {
+                        admins.push({ telegram_id: parseInt(id) });
                     }
-                    resolve(admins);
-                }
-            });
-        });
+                });
+            }
+
+            return admins;
+        } catch (error) {
+            console.error('Error getting admins:', error);
+            return [];
+        }
     }
 
     async saveAssessment(userId, assessmentData) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                INSERT INTO assessments 
-                (user_id, type, audio_duration, overall_score, accuracy_score, 
-                 fluency_score, completeness_score, prosody_score, word_accuracy, 
-                 transcription, target_text, feedback, english_level) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            
-            this.db.run(query, [
-                userId,
-                assessmentData.type || 'general',
-                assessmentData.audioDuration,
-                assessmentData.overallScore || 0,
-                assessmentData.accuracyScore || 0,
-                assessmentData.fluencyScore || 0,
-                assessmentData.completenessScore || 0,
-                assessmentData.prosodyScore || 0,
-                assessmentData.wordAccuracy || 0,
-                assessmentData.transcription || '',
-                assessmentData.target_text || '',
-                assessmentData.feedback || '',
-                assessmentData.englishLevel || ''
-            ], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('assessments')
+                .insert({
+                    user_id: userId,
+                    type: assessmentData.type || 'general',
+                    audio_duration: assessmentData.audioDuration,
+                    overall_score: assessmentData.overallScore || 0,
+                    accuracy_score: assessmentData.accuracyScore || 0,
+                    fluency_score: assessmentData.fluencyScore || 0,
+                    completeness_score: assessmentData.completenessScore || 0,
+                    prosody_score: assessmentData.prosodyScore || 0,
+                    word_accuracy: assessmentData.wordAccuracy || 0,
+                    transcription: assessmentData.transcription || '',
+                    target_text: assessmentData.target_text || '',
+                    feedback: assessmentData.feedback || '',
+                    english_level: assessmentData.englishLevel || ''
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data.id;
+        } catch (error) {
+            console.error('Error saving assessment:', error);
+            throw error;
+        }
     }
 
     async getLastAssessment(telegramId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT a.* FROM assessments a
-                JOIN users u ON a.user_id = u.id
-                WHERE u.telegram_id = ?
-                ORDER BY a.created_at DESC
-                LIMIT 1
-            `;
-            
-            this.db.get(query, [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('assessments')
+                .select(`
+                    *,
+                    user:users(telegram_id)
+                `)
+                .eq('user.telegram_id', telegramId)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (error) throw error;
+            return data && data.length > 0 ? data[0] : null;
+        } catch (error) {
+            console.error('Error getting last assessment:', error);
+            return null;
+        }
     }
 
     async getUserStats(telegramId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    COUNT(*) as total_assessments,
-                    AVG(overall_score) as avg_overall,
-                    AVG(accuracy_score) as avg_accuracy,
-                    AVG(fluency_score) as avg_fluency
-                FROM assessments a
-                JOIN users u ON a.user_id = u.id
-                WHERE u.telegram_id = ?
-                GROUP BY u.id
-            `;
-            
-            this.db.get(query, [telegramId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        try {
+            // Get user first
+            const user = await this.getUserByTelegramId(telegramId);
+            if (!user) {
+                return {
+                    total_assessments: 0,
+                    avg_overall: 0,
+                    avg_accuracy: 0,
+                    avg_fluency: 0
+                };
+            }
+
+            const { data, error } = await this.supabase
+                .from('assessments')
+                .select('overall_score, accuracy_score, fluency_score')
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                return {
+                    total_assessments: 0,
+                    avg_overall: 0,
+                    avg_accuracy: 0,
+                    avg_fluency: 0
+                };
+            }
+
+            const totalAssessments = data.length;
+            const avgOverall = data.reduce((sum, a) => sum + (a.overall_score || 0), 0) / totalAssessments;
+            const avgAccuracy = data.reduce((sum, a) => sum + (a.accuracy_score || 0), 0) / totalAssessments;
+            const avgFluency = data.reduce((sum, a) => sum + (a.fluency_score || 0), 0) / totalAssessments;
+
+            return {
+                total_assessments: totalAssessments,
+                avg_overall: avgOverall,
+                avg_accuracy: avgAccuracy,
+                avg_fluency: avgFluency
+            };
+        } catch (error) {
+            console.error('Error getting user stats:', error);
+            return {
+                total_assessments: 0,
+                avg_overall: 0,
+                avg_accuracy: 0,
+                avg_fluency: 0
+            };
+        }
     }
 
     async logApiUsage(modelName, promptTokens, candidatesTokens, totalTokens, requestType = 'assessment') {
-        return new Promise((resolve, reject) => {
-            const query = `
-                INSERT INTO api_usage (model_name, prompt_tokens, candidates_tokens, total_tokens, request_type)
-                VALUES (?, ?, ?, ?, ?)
-            `;
-            this.db.run(query, [modelName, promptTokens, candidatesTokens, totalTokens, requestType], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('api_usage')
+                .insert({
+                    model_name: modelName,
+                    prompt_tokens: promptTokens,
+                    candidates_tokens: candidatesTokens,
+                    total_tokens: totalTokens,
+                    request_type: requestType
+                });
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error logging API usage:', error);
+            throw error;
+        }
     }
 
     async getApiStats() {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    model_name,
-                    COUNT(*) as total_requests,
-                    SUM(prompt_tokens) as total_prompt_tokens,
-                    SUM(candidates_tokens) as total_candidates_tokens,
-                    SUM(total_tokens) as total_tokens
-                FROM api_usage
-                GROUP BY model_name
-            `;
-            this.db.all(query, (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('api_usage')
+                .select('model_name, prompt_tokens, candidates_tokens, total_tokens');
+
+            if (error) throw error;
+            if (!data || data.length === 0) return [];
+
+            // Group by model_name in JavaScript
+            const stats = data.reduce((acc, item) => {
+                const name = item.model_name || 'unknown';
+                if (!acc[name]) {
+                    acc[name] = {
+                        model_name: name,
+                        total_requests: 0,
+                        total_prompt_tokens: 0,
+                        total_candidates_tokens: 0,
+                        total_tokens: 0
+                    };
+                }
+                acc[name].total_requests += 1;
+                acc[name].total_prompt_tokens += (item.prompt_tokens || 0);
+                acc[name].total_candidates_tokens += (item.candidates_tokens || 0);
+                acc[name].total_tokens += (item.total_tokens || 0);
+                return acc;
+            }, {});
+
+            return Object.values(stats);
+        } catch (error) {
+            console.error('Error getting API stats:', error);
+            return [];
+        }
     }
 
     async getTotalUserCount() {
-        return new Promise((resolve, reject) => {
-            this.db.get('SELECT COUNT(*) as total FROM users', (err, row) => {
-                if (err) reject(err);
-                else resolve(row ? row.total : 0);
-            });
-        });
+        try {
+            const { count, error } = await this.supabase
+                .from('users')
+                .select('*', { count: 'exact', head: true });
+
+            if (error) throw error;
+            return count || 0;
+        } catch (error) {
+            console.error('Error getting total user count:', error);
+            return 0;
+        }
     }
 
     async getMonthlyUsers() {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT COUNT(*) as total 
-                FROM users 
-                WHERE created_at >= datetime('now', '-1 month')
-            `;
-            this.db.get(query, (err, row) => {
-                if (err) reject(err);
-                else resolve(row ? row.total : 0);
-            });
-        });
+        try {
+            const startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - 1);
+
+            const { count, error } = await this.supabase
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .gte('created_at', startDate.toISOString());
+
+            if (error) throw error;
+            return count || 0;
+        } catch (error) {
+            console.error('Error getting monthly users:', error);
+            return 0;
+        }
     }
 
-    // Teacher-Student Relationship Methods
+    // --- Teacher-Student Management ---
     async assignStudentToTeacher(teacherId, studentId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                INSERT OR REPLACE INTO teacher_students (teacher_id, student_id, status)
-                VALUES (?, ?, 'active')
-            `;
-            this.db.run(query, [teacherId, studentId], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
+        try {
+            const { error } = await this.supabase
+                .from('teacher_students')
+                .insert({
+                    teacher_id: teacherId,
+                    student_id: studentId
+                });
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error assigning student to teacher:', error);
+            throw error;
+        }
+    }
+
+    async getUserById(id) {
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting user by ID:', error);
+            return null;
+        }
+    }
+
+    async getTestWordById(id) {
+        try {
+            const { data, error } = await this.supabase
+                .from('test_words')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting test word by ID:', error);
+            return null;
+        }
+    }
+
+    async getTeachersAndAdmins() {
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('*')
+                .or('is_teacher.eq.true,is_admin.eq.true');
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting teachers and admins:', error);
+            return [];
+        }
+    }
+
+    async getGeneralStats() {
+        try {
+            const [users, assessments, words] = await Promise.all([
+                this.supabase.from('users').select('*', { count: 'exact', head: true }),
+                this.supabase.from('assessments').select('*', { count: 'exact', head: true }),
+                this.supabase.from('test_words').select('*', { count: 'exact', head: true })
+            ]);
+
+            return {
+                total_users: users.count || 0,
+                total_assessments: assessments.count || 0,
+                total_words: words.count || 0
+            };
+        } catch (error) {
+            console.error('Error getting general stats:', error);
+            return { total_users: 0, total_assessments: 0, total_words: 0 };
+        }
+    }
+
+    async getRecentAssessments(limit = 10) {
+        try {
+            const { data, error } = await this.supabase
+                .from('assessments')
+                .select(`
+                    *,
+                    users!inner(first_name, username)
+                `)
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (error) throw error;
+
+            return data.map(item => ({
+                ...item,
+                first_name: item.users.first_name,
+                username: item.users.username
+            }));
+        } catch (error) {
+            console.error('Error getting recent assessments:', error);
+            return [];
+        }
+    }
+
+    async removeStudentFromTeacher(teacherTelegramId, studentId) {
+        try {
+            // Get teacher record id
+            const teacher = await this.getUserByTelegramId(teacherTelegramId);
+            if (!teacher) throw new Error('Teacher not found');
+
+            const { error } = await this.supabase
+                .from('teacher_students')
+                .delete()
+                .eq('teacher_id', teacher.id)
+                .eq('student_id', studentId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error removing student from teacher:', error);
+            throw error;
+        }
     }
 
     async getTeacherStudents(teacherId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT u.id, u.telegram_id, u.first_name, u.username, ts.assigned_at, ts.status
-                FROM users u
-                JOIN teacher_students ts ON u.id = ts.student_id
-                WHERE (ts.teacher_id = ? OR ts.teacher_id = (SELECT id FROM users WHERE telegram_id = ?)) AND ts.status = 'active'
-                ORDER BY ts.assigned_at DESC
-            `;
-            this.db.all(query, [teacherId, teacherId], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('teacher_students')
+                .select(`
+                    student:users!student_id(*)
+                `)
+                .eq('teacher_id', teacherId)
+                .eq('status', 'active');
+
+            if (error) throw error;
+            return data ? data.map(item => item.student) : [];
+        } catch (error) {
+            console.error('Error getting teacher students:', error);
+            return [];
+        }
     }
 
     async getStudentTeachers(studentId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT u.id, u.telegram_id, u.first_name, u.username, ts.assigned_at
-                FROM users u
-                JOIN teacher_students ts ON u.id = ts.teacher_id
-                WHERE (ts.student_id = ? OR ts.student_id = (SELECT id FROM users WHERE telegram_id = ?)) AND ts.status = 'active'
-            `;
-            this.db.all(query, [studentId, studentId], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('teacher_students')
+                .select(`
+                    teacher:users!teacher_id(*)
+                `)
+                .eq('student_id', studentId)
+                .eq('status', 'active');
+
+            if (error) throw error;
+            return data ? data.map(item => item.teacher) : [];
+        } catch (error) {
+            console.error('Error getting student teachers:', error);
+            return [];
+        }
     }
 
     async removeStudentFromTeacher(teacherId, studentId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                UPDATE teacher_students 
-                SET status = 'inactive' 
-                WHERE (teacher_id = ? OR teacher_id = (SELECT id FROM users WHERE telegram_id = ?)) 
-                AND (student_id = ? OR student_id = (SELECT id FROM users WHERE telegram_id = ?))
-            `;
-            this.db.run(query, [teacherId, teacherId, studentId, studentId], function(err) {
-                if (err) reject(err);
-                else resolve(this.changes);
-            });
-        });
-    }
+        try {
+            const { error } = await this.supabase
+                .from('teacher_students')
+                .update({ status: 'inactive' })
+                .eq('teacher_id', teacherId)
+                .eq('student_id', studentId);
 
-    // Student Task Methods
-    async createTask(teacherId, studentId, taskText, taskType = 'pronunciation', difficulty = 'medium', dueDate = null) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                INSERT INTO student_tasks (teacher_id, student_id, task_text, task_type, difficulty, due_date)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `;
-            this.db.run(query, [teacherId, studentId, taskText, taskType, difficulty, dueDate], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error removing student from teacher:', error);
+            throw error;
+        }
     }
 
     async getStudentTasks(studentId, status = null) {
-        return new Promise((resolve, reject) => {
-            let query = `
-                SELECT st.*, u.first_name as teacher_name, u.username as teacher_username, a.overall_score
-                FROM student_tasks st
-                JOIN users u ON (st.teacher_id = u.id OR st.teacher_id = u.telegram_id)
-                LEFT JOIN assessments a ON st.assessment_id = a.id
-                WHERE (st.student_id = ? OR st.student_id = (SELECT id FROM users WHERE telegram_id = ?))
-            `;
-            const params = [studentId, studentId];
-            
+        try {
+            let query = this.supabase
+                .from('student_tasks')
+                .select(`
+                    *,
+                    teacher:users!teacher_id(first_name, username),
+                    assessment:assessments(*)
+                `)
+                .eq('student_id', studentId);
+
             if (status) {
-                query += ' AND st.status = ?';
-                params.push(status);
+                query = query.eq('status', status);
             }
-            
-            query += ' ORDER BY st.created_at DESC';
-            
-            this.db.all(query, params, (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+
+            const { data, error } = await query.order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting student tasks:', error);
+            return [];
+        }
     }
 
     async getTeacherTasks(teacherId, status = null) {
-        return new Promise((resolve, reject) => {
-            let query = `
-                SELECT st.*, u.first_name as student_name, u.username as student_username, a.overall_score
-                FROM student_tasks st
-                JOIN users u ON st.student_id = u.id
-                LEFT JOIN assessments a ON st.assessment_id = a.id
-                WHERE (st.teacher_id = ? OR st.teacher_id = (SELECT id FROM users WHERE telegram_id = ?))
-            `;
-            const params = [teacherId, teacherId];
-            
+        try {
+            let query = this.supabase
+                .from('student_tasks')
+                .select(`
+                    *,
+                    student:users!student_id(first_name, username),
+                    assessment:assessments(*)
+                `)
+                .eq('teacher_id', teacherId);
+
             if (status) {
-                query += ' AND st.status = ?';
-                params.push(status);
+                query = query.eq('status', status);
             }
-            
-            query += ' ORDER BY st.created_at DESC';
-            
-            this.db.all(query, params, (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+
+            const { data, error } = await query.order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting teacher tasks:', error);
+            return [];
+        }
     }
 
     async getTaskById(taskId) {
-        return new Promise((resolve, reject) => {
-            console.log('getTaskById called with taskId:', taskId);
-            const query = `
-                SELECT st.*, u.first_name as teacher_name, u.username as teacher_username, u.telegram_id as teacher_telegram_id, a.overall_score
-                FROM student_tasks st
-                JOIN users u ON (st.teacher_id = u.id OR st.teacher_id = u.telegram_id)
-                LEFT JOIN assessments a ON st.assessment_id = a.id
-                WHERE st.id = ?
-            `;
-            
-            console.log('Executing query:', query);
-            console.log('With params:', [taskId]);
-            
-            this.db.get(query, [taskId], (err, row) => {
-                if (err) {
-                    console.error('Database error in getTaskById:', err);
-                    reject(err);
-                } else {
-                    console.log('Query result:', row);
-                    resolve(row || null);
-                }
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('student_tasks')
+                .select(`
+                    *,
+                    teacher:users!teacher_id(first_name, username, telegram_id),
+                    assessment:assessments(*)
+                `)
+                .eq('id', taskId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting task by ID:', error);
+            return null;
+        }
+    }
+
+    async createTask(teacherId, studentId, taskText, taskType = 'pronunciation', difficulty = 'medium', dueDate = null) {
+        return this.createStudentTask(teacherId, studentId, taskText, taskType, difficulty, dueDate);
+    }
+
+    async createStudentTask(teacherId, studentId, taskText, taskType = 'pronunciation', difficulty = 'medium', dueDate = null) {
+        try {
+            const { data, error } = await this.supabase
+                .from('student_tasks')
+                .insert({
+                    teacher_id: teacherId,
+                    student_id: studentId,
+                    task_text: taskText,
+                    task_type: taskType,
+                    difficulty: difficulty,
+                    due_date: dueDate
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error creating student task:', error);
+            throw error;
+        }
     }
 
     async submitTask(taskId, assessmentId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                UPDATE student_tasks 
-                SET status = 'submitted', 
-                    submitted_at = CURRENT_TIMESTAMP,
-                    assessment_id = ?
-                WHERE id = ?
-            `;
-            this.db.run(query, [assessmentId, taskId], function(err) {
-                if (err) reject(err);
-                else resolve(this.changes);
-            });
+        return this.updateStudentTask(taskId, {
+            status: 'submitted',
+            submitted_at: new Date().toISOString(),
+            assessment_id: assessmentId
         });
     }
 
     async gradeTask(taskId, status = 'graded') {
-        return new Promise((resolve, reject) => {
-            const query = `
-                UPDATE student_tasks 
-                SET status = ?
-                WHERE id = ?
-            `;
-            this.db.run(query, [status, taskId], function(err) {
-                if (err) reject(err);
-                else resolve(this.changes);
-            });
-        });
+        return this.updateStudentTask(taskId, { status });
     }
 
-    async deleteTask(taskId, teacherId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                DELETE FROM student_tasks 
-                WHERE id = ? AND (teacher_id = ? OR teacher_id = (SELECT id FROM users WHERE telegram_id = ?))
-            `;
-            this.db.run(query, [taskId, teacherId, teacherId], function(err) {
-                if (err) reject(err);
-                else resolve(this.changes);
-            });
-        });
+    async updateStudentTask(taskId, updates) {
+        try {
+            const { error } = await this.supabase
+                .from('student_tasks')
+                .update(updates)
+                .eq('id', taskId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error updating student task:', error);
+            throw error;
+        }
+    }
+
+    async deleteTask(taskId) {
+        return this.deleteStudentTask(taskId);
+    }
+
+    async deleteStudentTask(taskId) {
+        try {
+            const { error } = await this.supabase
+                .from('student_tasks')
+                .delete()
+                .eq('id', taskId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting student task:', error);
+            throw error;
+        }
+    }
+
+    async getLeaderboard(limit = 10, minAssessments = 1) {
+        try {
+            const now = Date.now();
+            if (this.leaderboardCache && (now - this.leaderboardLastUpdate < this.CACHE_DURATION)) {
+                return this.leaderboardCache.filter(u => u.total >= minAssessments).slice(0, limit);
+            }
+
+            const { data, error } = await this.supabase
+                .from('assessments')
+                .select(`
+                    overall_score,
+                    user_id,
+                    users (
+                        first_name,
+                        username
+                    )
+                `);
+
+            if (error) throw error;
+            if (!data || data.length === 0) return [];
+
+            const userStats = data.reduce((acc, item) => {
+                const userId = item.user_id;
+                if (!acc[userId]) {
+                    acc[userId] = {
+                        id: userId,
+                        name: item.users?.first_name || 'Foydalanuvchi',
+                        username: item.users?.username,
+                        total: 0,
+                        sumOverall: 0
+                    };
+                }
+                acc[userId].total += 1;
+                acc[userId].sumOverall += (item.overall_score || 0);
+                return acc;
+            }, {});
+
+            this.leaderboardCache = Object.values(userStats)
+                .map(u => ({
+                    ...u,
+                    avgOverall: u.sumOverall / u.total
+                }))
+                .sort((a, b) => b.avgOverall - a.avgOverall);
+
+            this.leaderboardLastUpdate = now;
+
+            return this.leaderboardCache.filter(u => u.total >= minAssessments).slice(0, limit);
+        } catch (error) {
+            console.error('Error getting leaderboard:', error);
+            return [];
+        }
     }
 
     async getTotalApiUsage() {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    COUNT(*) as total_requests,
-                    SUM(prompt_tokens) as total_prompt_tokens,
-                    SUM(candidates_tokens) as total_candidates_tokens,
-                    SUM(total_tokens) as total_tokens
-                FROM api_usage
-            `;
-            this.db.get(query, (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { total_requests: 0, total_prompt_tokens: 0, total_candidates_tokens: 0, total_tokens: 0 });
-            });
-        });
+        try {
+            const { data, error } = await this.supabase
+                .from('api_usage')
+                .select('prompt_tokens, candidates_tokens, total_tokens');
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                return { total_requests: 0, total_prompt_tokens: 0, total_candidates_tokens: 0, total_tokens: 0 };
+            }
+
+            return {
+                total_requests: data.length,
+                total_prompt_tokens: data.reduce((sum, item) => sum + (item.prompt_tokens || 0), 0),
+                total_candidates_tokens: data.reduce((sum, item) => sum + (item.candidates_tokens || 0), 0),
+                total_tokens: data.reduce((sum, item) => sum + (item.total_tokens || 0), 0)
+            };
+        } catch (error) {
+            console.error('Error getting total API usage:', error);
+            return { total_requests: 0, total_prompt_tokens: 0, total_candidates_tokens: 0, total_tokens: 0 };
+        }
     }
 }
 

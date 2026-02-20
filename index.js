@@ -16,7 +16,7 @@ bot.use(session());
 // Ensure session exists
 bot.use(async (ctx, next) => {
     if (!ctx.session) ctx.session = {};
-    
+
     // Ensure user exists in DB and attach to context
     if (ctx.from && !ctx.from.is_bot) {
         let user = await database.getUserByTelegramId(ctx.from.id);
@@ -26,7 +26,7 @@ bot.use(async (ctx, next) => {
         }
         ctx.state.user = user;
     }
-    
+
     return next();
 });
 
@@ -89,7 +89,7 @@ bot.action('check_subscription', async (ctx) => {
 
         if (isMember) {
             await safeAnswerCbQuery(ctx, "✅ Rahmat! Endi botdan foydalanishingiz mumkin.");
-            await ctx.deleteMessage().catch(() => {});
+            await ctx.deleteMessage().catch(() => { });
             return commandHandler.handleStart(ctx);
         } else {
             await safeAnswerCbQuery(ctx, "❌ Siz hali kanalga a'zo emassiz!", { show_alert: true });
@@ -108,15 +108,14 @@ bot.command('admin', (ctx) => commandHandler.handleAdmin(ctx));
 bot.command('teacher', (ctx) => commandHandler.handleTeacher(ctx));
 
 // Main Menu Handlers
-bot.hears('🎯 Talaffuzni test qilish', (ctx) => commandHandler.handleTestPronunciation(ctx));
-bot.hears('🎲 Tasodifiy', (ctx) => commandHandler.handleRandomMenu(ctx));
+// bot.hears('🎯 Talaffuzni test qilish', (ctx) => commandHandler.handleTestPronunciation(ctx));
+bot.hears(['🎲 Tasodifiy', '🎯 Talaffuzni test qilish', '🎲 Talaffuzni test qilish'], (ctx) => commandHandler.handleRandomMenu(ctx));
 bot.hears('📝 Matn va Audio', (ctx) => commandHandler.handleCompareTextAudio(ctx));
 bot.hears(['🔊 Matnni audioga o\'tkazish', '🔊 Matnni audyoga o\'tkazish'], (ctx) => commandHandler.handleTextToAudio(ctx));
 bot.hears('📊 Mening natijalarim', (ctx) => commandHandler.handleStats(ctx));
-bot.hears('📊 Limitim', (ctx) => commandHandler.handleLimitInfo(ctx));
 bot.hears('👤 Profil', (ctx) => commandHandler.handleProfile(ctx));
 bot.hears('🔗 Referal', (ctx) => commandHandler.handleReferral(ctx));
-bot.hears('💎 Premium', (ctx) => commandHandler.handlePremium(ctx));
+bot.hears('💳 Tarif reja', (ctx) => commandHandler.handleTariffPlan(ctx));
 bot.hears('🏠 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 bot.hears('🔙 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 
@@ -217,14 +216,14 @@ bot.on('text', async (ctx, next) => {
     if (ctx.session?.state === 'waiting_for_student_assignment') {
         return commandHandler.handleStudentAssignmentProcessing(ctx);
     }
-    
+
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
     const menuButtons = [
         '🎯 Talaffuzni test qilish', '🎲 Tasodifiy', '📝 Matn va Audio', '🔊 Matnni audioga o\'tkazish', '🔊 Matnni audyoga o\'tkazish',
-        '📊 Mening natijalarim', '📊 Limitim', '👤 Profil', '🔗 Referal', '💎 Premium',
+        '📊 Mening natijalarim', '👤 Profil', '🔗 Referal', '💳 Tarif reja',
         '🏠 Asosiy menyu', '🔙 Asosiy menyu'
     ];
-    
+
     if (ctx.message.text.startsWith('/') || menuButtons.includes(ctx.message.text)) {
         ctx.session.state = null;
         return next();
@@ -242,7 +241,7 @@ bot.on(['photo', 'video', 'document'], async (ctx) => {
     if (ctx.session?.state === 'waiting_for_payment_details' && ctx.message.photo) {
         const photo = ctx.message.photo[ctx.message.photo.length - 1];
         const caption = ctx.message.caption || 'Izohsiz yuborildi';
-        
+
         const tariff = ctx.session.selectedTariff;
         if (!tariff) {
             ctx.session.state = null;
@@ -250,20 +249,20 @@ bot.on(['photo', 'video', 'document'], async (ctx) => {
         }
 
         const user = await database.getUserByTelegramId(ctx.from.id);
-        
+
         await database.createPaymentRequest(user.id, tariff.id, photo.file_id, caption);
-        
+
         ctx.session.state = null;
         ctx.session.selectedTariff = null;
 
         await ctx.reply("✅ To'lov cheki qabul qilindi! Adminlar tez orada ko'rib chiqib, Premium obunangizni tasdiqlashadi.");
-        
+
         // Notify admin
         const admins = await database.getAdmins();
         for (const admin of admins) {
             try {
                 await ctx.telegram.sendPhoto(admin.telegram_id, photo.file_id, {
-                    caption: `� *Yangi to'lov so'rovi!*\n\n` +
+                    caption: `💰 *Yangi to'lov so'rovi!*\n\n` +
                         `👤 Foydalanuvchi: ${ctx.from.first_name} (${ctx.from.username || 'username yo\'q'})\n` +
                         `💎 Tarif: ${tariff.name}\n` +
                         `💵 Narxi: ${tariff.price.toLocaleString()} so'm\n` +
@@ -277,29 +276,29 @@ bot.on(['photo', 'video', 'document'], async (ctx) => {
         }
         return;
     }
-    
+
     await ctx.reply("Iltimos, avval menyudan kerakli bo'limni tanlang.");
 });
 
 // Error handling with better user blocking detection
 bot.catch((err, ctx) => {
     console.error(`Error for ${ctx.updateType}:`, err);
-    
+
     // Check if user blocked the bot
-    if (err.response?.error_code === 403 && 
+    if (err.response?.error_code === 403 &&
         err.response?.description?.includes('bot was blocked by the user')) {
         console.log(`User ${ctx.from?.id} blocked the bot`);
         return; // Don't try to reply to blocked users
     }
-    
+
     // Check if it's a callback query timeout
-    if (err.response?.error_code === 400 && 
-        (err.response?.description?.includes('timeout') || 
-         err.response?.description?.includes('invalid'))) {
+    if (err.response?.error_code === 400 &&
+        (err.response?.description?.includes('timeout') ||
+            err.response?.description?.includes('invalid'))) {
         console.log('Callback query timeout - ignoring');
         return; // Don't reply to timeout errors
     }
-    
+
     // For other errors, try to reply safely
     try {
         ctx.reply("Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.");
@@ -313,11 +312,11 @@ const updateBotDescription = async () => {
     try {
         // Set simple description without user count for now
         const description = "Ingliz tili talaffuzini baholash boti";
-        
+
         // Update bot description
         await bot.telegram.setMyDescription(description);
         console.log(`Bot description updated: ${description}`);
-        
+
     } catch (error) {
         console.error('Error updating bot description:', error);
     }
@@ -336,7 +335,14 @@ process.on('uncaughtException', (error) => {
 
 // Start bot with retry logic
 const startBot = async (retries = 5) => {
-    // Start dummy HTTP server for Render before launching bot
+    // Initialize database tables/seed data
+    try {
+        await database.initializeTables();
+    } catch (dbErr) {
+        console.error('Database initialization error:', dbErr);
+    }
+
+    // Start health check server
     const PORT = process.env.PORT || 3000;
     const server = http.createServer((req, res) => {
         if (req.url === '/ping') {
@@ -348,16 +354,24 @@ const startBot = async (retries = 5) => {
         res.end('Bot is running\n');
     }).listen(PORT, '0.0.0.0', () => {
         console.log(`📡 Health check server listening on port ${PORT}`);
-        
+
         // Start self-pinging to keep the service awake on Render
         const APP_URL = 'https://ravon-ai-bot-7xh1.onrender.com';
-        setInterval(() => {
+        const pingInterval = setInterval(() => {
             https.get(`${APP_URL}/ping`, (res) => {
                 console.log(`Self-ping sent to ${APP_URL}/ping. Status: ${res.statusCode}`);
             }).on('error', (err) => {
                 console.error('Self-ping error:', err.message);
             });
-        }, 12 * 60 * 1000); // Ping every 14 minutes (Render free tier sleeps after 15m)
+        }, 12 * 60 * 1000); // Ping every 12 minutes
+
+        // Store interval to clear it later
+        process.on('shutdown', () => clearInterval(pingInterval));
+    });
+
+    // Store server to close it later
+    process.on('shutdown', () => {
+        server.close(() => console.log('HTTP server closed'));
     });
 
     // Force polling mode to avoid webhook conflicts
@@ -366,20 +380,20 @@ const startBot = async (retries = 5) => {
     for (let i = 0; i < retries; i++) {
         try {
             console.log(`🚀 Starting Preimum English AI bot... (Attempt ${i + 1}/${retries})`);
-            
+
             // Clear any existing webhook
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             console.log('✅ Webhook cleared');
-            
-            // Start with polling
+
+            // Start with optimized polling
             await bot.launch({
                 polling: {
                     interval: 300,
                     autoStart: true,
-                    allowedUpdates: ['message', 'callback_query', 'edited_message']
+                    allowedUpdates: ['message', 'callback_query', 'edited_message', 'voice', 'audio']
                 }
             });
-            
+
             console.log('✅ Bot is running with polling!');
             return;
         } catch (err) {
@@ -390,7 +404,7 @@ const startBot = async (retries = 5) => {
             }
             if (i < retries - 1) {
                 const waitTime = 5000 * (i + 1);
-                console.log(`🔄 Retrying in ${waitTime/1000} seconds...`);
+                console.log(`🔄 Retrying in ${waitTime / 1000} seconds...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             } else {
                 console.error('💥 Max retries reached. Could not start bot.');
@@ -404,8 +418,31 @@ startBot();
 
 // Update bot description periodically
 updateBotDescription(); // Update immediately on start
-setInterval(updateBotDescription, 60 * 60 * 1000); // Update every 1 hour (was 5 min)
+const descriptionInterval = setInterval(updateBotDescription, 60 * 60 * 1000); // Update every 1 hour
+process.on('shutdown', () => clearInterval(descriptionInterval));
+
+// Graceful shutdown function
+const gracefulShutdown = async (signal) => {
+    console.log(`\n👋 ${signal} received. Shutting down gracefully...`);
+
+    // Stop the bot
+    try {
+        await bot.stop(signal);
+        console.log('✅ Bot stopped');
+    } catch (err) {
+        console.error('Error stopping bot:', err.message);
+    }
+
+    // Emit shutdown event for other components (server, intervals)
+    process.emit('shutdown');
+
+    // Wait a bit for everything to close then exit
+    setTimeout(() => {
+        console.log('Bye!');
+        process.exit(0);
+    }, 1000);
+};
 
 // Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));

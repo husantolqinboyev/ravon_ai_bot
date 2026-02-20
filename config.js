@@ -20,4 +20,9 @@ module.exports = {
     // Channel Subscription Check
     REQUIRED_CHANNEL_ID: '-1003014655042',
     CHANNEL_URL: 'https://t.me/englishwithSanatbek',
+
+    // Supabase Configuration
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
 };

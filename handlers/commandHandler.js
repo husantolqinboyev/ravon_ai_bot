@@ -11,10 +11,10 @@ const config = require('../config');
 class CommandHandler {
     constructor() {
         this.mainMenu = Markup.keyboard([
-            ['🎯 Talaffuzni test qilish', '🎲 Tasodifiy'],
+            ['🎲 Talaffuzni test qilish'],
             ['📝 Matn va Audio', '🔊 Matnni audioga o\'tkazish'],
-            ['📊 Mening natijalarim', '📊 Limitim'],
-            ['👤 Profil', '🔗 Referal', '💎 Premium']
+            ['📊 Mening natijalarim', '👤 Profil'],
+            ['🔗 Referal', '💳 Tarif reja']
         ]).resize();
 
         this.adminMenu = Markup.keyboard([
@@ -38,13 +38,13 @@ class CommandHandler {
     async handleStart(ctx) {
         const startPayload = ctx.startPayload; // Deep link payload (referrer ID)
         let referrerId = null;
-        
+
         if (startPayload && !isNaN(startPayload)) {
             referrerId = parseInt(startPayload);
         }
 
         await database.saveUser(ctx.from, referrerId);
-        
+
         // Auto-set first user as admin if no admin exists and no ADMIN_ID in .env
         const adminCount = await database.getAdminCount();
         if (adminCount === 0 && (!config.ADMIN_IDS || config.ADMIN_IDS.length === 0)) {
@@ -53,11 +53,11 @@ class CommandHandler {
 
         const isAdmin = await database.isAdmin(ctx.from.id);
         const isTeacher = await database.isTeacher(ctx.from.id);
-        
+
         // Get monthly users count
         const monthlyUsers = await database.getMonthlyUsers();
         const totalUsers = await database.getTotalUserCount();
-        
+
         let displayUsers, userLabel;
         if (isAdmin) {
             // Admins see real numbers
@@ -74,7 +74,7 @@ class CommandHandler {
                 userLabel = 'oylik';
             }
         }
-        
+
         let welcomeMessage = `Assalomu alaykum! 👋\n\n` +
             `Men **Ravon AI** — sizning ingliz tili talaffuzingizni baholashga yordam beruvchi botman.\n\n` +
             `🎯 **Ravon AI — Talaffuzingizni mukammallashtiring!**\n\n` +
@@ -85,7 +85,7 @@ class CommandHandler {
             `✅ **PDF tahlil:** Nutqingiz natijalarini professional PDF hisobot ko'rinishida oling.\n\n` +
             `🎁 **Siz uchun 3 ta bepul imkoniyat tayyor!**\n\n` +
             `👇 Hoziroq quyidagi bo'limlardan birini tanlang va nutqingizni sinab ko'ring!`;
-        
+
         if (isAdmin) {
             welcomeMessage += `\n\n👨‍💼 Siz adminsiz. Admin panelga kirish uchun /admin buyrug'ini yuboring.`;
         } else if (isTeacher) {
@@ -121,9 +121,9 @@ class CommandHandler {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        database.db.all('SELECT * FROM users WHERE is_teacher = 1 OR is_admin = 1', (err, rows) => {
-            if (err) return ctx.reply('Xatolik yuz berdi.');
-            
+        try {
+            const rows = await database.getTeachersAndAdmins();
+
             let msg = `👨‍🏫 *O'qituvchilar va Adminlar ro'yxati:*\n\n`;
             const buttons = [];
 
@@ -140,7 +140,10 @@ class CommandHandler {
             } else {
                 ctx.replyWithMarkdown(msg);
             }
-        });
+        } catch (error) {
+            console.error('Error in handleTeachers:', error);
+            ctx.reply('Xatolik yuz berdi.');
+        }
     }
 
     async handleMainMenu(ctx) {
@@ -150,14 +153,14 @@ class CommandHandler {
     async processTextForPronunciation(ctx) {
         const text = ctx.message.text;
         const user = await database.getUserByTelegramId(ctx.from.id);
-        
+
         // Check word limit
         const limitCheck = checkTextLimit(text, user);
-        
+
         if (!limitCheck.allowed) {
             return ctx.reply(`⚠️ Matn uzunligi limitdan oshdi!\n\nSizning limitiz: ${limitCheck.limit} so'z\nYuborgan matningiz: ${limitCheck.wordCount} so'z\n\nIltimos, qisqaroq matn yuboring yoki Premium obunaga o'ting.`);
         }
-        
+
         // Check daily limit
         const canProceed = await database.checkLimit(ctx.from.id);
         if (!canProceed) {
@@ -165,21 +168,21 @@ class CommandHandler {
             const userId = ctx.from.id;
             const botUsername = ctx.botInfo.username;
             const referralLink = `https://t.me/${botUsername}?start=${userId}`;
-            
+
             const msg = "⚠️ *Kunlik limitingiz tugagan!*\n\n" +
                 "Xavotir olmang, limitingizni osongina oshirishingiz mumkin. " +
                 "Har 3 ta taklif qilingan do'stingiz uchun sizga *+3 ta bonus limit* beriladi!\n\n" +
                 "🔗 *Sizning referal havolangiz:*\n" +
                 `\`${referralLink}\``;
-            
+
             return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
                 [Markup.button.callback('🔗 Referal bo\'limi', 'show_referral_info')]
             ]));
         }
-        
+
         ctx.session.testWord = text;
         ctx.session.state = 'waiting_for_test_audio';
-        
+
         await ctx.reply(`✅ So'z qabul qilindi (${limitCheck.wordCount}/${limitCheck.limit} so'z)!\n\n🎙 Endi shu so'zni ovozli yozib yuboring:`);
         await ctx.reply(`_"${text}"_`, { parse_mode: 'Markdown' });
     }
@@ -213,7 +216,7 @@ class CommandHandler {
             const typeText = isLong ? 'matnni' : 'so\'zni';
 
             const msg = `🎲 *Tasodifiy ${typeText}!*\n\n👉 *${word.word}*\n\nTayyor bo'lsangiz, "O'qish" tugmasini bosing:`;
-            
+
             await ctx.editMessageText(msg, {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
@@ -254,9 +257,7 @@ class CommandHandler {
     async handleStartTestById(ctx) {
         try {
             const textId = ctx.match[1];
-            const word = await new Promise((resolve) => {
-                database.db.get('SELECT * FROM test_words WHERE id = ?', [textId], (err, row) => resolve(row));
-            });
+            const word = await database.getTestWordById(textId);
 
             if (!word) {
                 return ctx.answerCbQuery("⚠️ Matn topilmadi.", { show_alert: true });
@@ -270,7 +271,7 @@ class CommandHandler {
             const typeText = isLong ? 'matnni' : 'so\'zni';
 
             const msg = `🎯 *Talaffuz testi!*\n\nSiz tanlagan ${typeText}:\n\n👉 *${word.word}*\n\nTayyor bo'lsangiz, "O'qish" tugmasini bosing:`;
-            
+
             await ctx.editMessageText(msg, {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
@@ -294,7 +295,7 @@ class CommandHandler {
             }
 
             ctx.session.state = 'waiting_for_test_audio';
-            
+
             await ctx.editMessageText(`🎙 *Sizning navbatingiz!*\n\nMatn: *${text}*\n\nIltimos, audioni yozib yuboring...`, { parse_mode: 'Markdown' });
             await ctx.answerCbQuery();
         } catch (error) {
@@ -335,10 +336,10 @@ class CommandHandler {
 
             await ctx.answerCbQuery("Audio tayyorlanmoqda... ⏳");
             const audioPath = await ttsService.generateAudio(text, 'en');
-            
+
             await ctx.reply(`🔊 *Namuna:*\n\n_"${text}"_`, { parse_mode: 'Markdown' });
             await ctx.replyWithAudio({ source: audioPath });
-            
+
             await ttsService.cleanup(audioPath);
         } catch (error) {
             console.error('Listen Test Text Error:', error);
@@ -352,7 +353,7 @@ class CommandHandler {
 
         try {
             const rows = await database.getRecentTestWords(20);
-            
+
             if (!rows || rows.length === 0) {
                 return ctx.reply('Hozircha matnlar mavjud emas.');
             }
@@ -381,7 +382,7 @@ class CommandHandler {
         try {
             await database.deleteTestWord(textId);
             await ctx.answerCbQuery('Matn muvaffaqiyatli o\'chirildi!');
-            ctx.deleteMessage().catch(() => {});
+            ctx.deleteMessage().catch(() => { });
         } catch (err) {
             console.error('Delete Text Error:', err);
             await ctx.answerCbQuery('O\'chirishda xatolik yuz berdi.');
@@ -400,7 +401,7 @@ class CommandHandler {
     async handleCompareChoice(ctx) {
         const choice = ctx.callbackQuery.data;
         ctx.session = ctx.session || {};
-        
+
         if (choice === 'compare_choice_word') {
             ctx.session.state = 'waiting_for_compare_word';
             await ctx.editMessageText('🔤 Iltimos, so\'zni yuboring (maksimal 2 ta so\'z):');
@@ -419,18 +420,29 @@ class CommandHandler {
 
     async handleProfile(ctx) {
         const stats = await database.getUserStats(ctx.from.id);
-        const user = await new Promise((resolve) => {
-            database.db.get('SELECT * FROM users WHERE telegram_id = ?', [ctx.from.id], (err, row) => resolve(row));
-        });
+        const user = await database.getUserByTelegramId(ctx.from.id);
+        const referralInfo = await database.getReferralInfo(ctx.from.id);
 
         if (!user) {
             return ctx.reply("Siz hali ro'yxatdan o'tmagansiz. Iltimos, /start buyrug'ini bosing.");
         }
 
-        const profileMsg = `👤 *Sizning profilingiz:*\n\n` +
+        let profileMsg = `👤 *Sizning profilingiz:*\n\n` +
             `🆔 ID: \`${ctx.from.id}\`\n` +
-            `📅 Ro'yxatdan o'tilgan: ${user.created_at ? user.created_at.split(' ')[0] : 'Noma\'lum'}\n` +
-            `🎯 Kunlik limit: ${user.used_today}/${user.daily_limit}\n\n` +
+            `📅 Ro'yxatdan o'tilgan: ${user.created_at ? user.created_at.split(' ')[0] : 'Noma\'lum'}\n\n` +
+            `📊 *Sizning limitingiz:*\n`;
+
+        if (user.is_premium) {
+            const until = new Date(user.premium_until).toLocaleDateString();
+            profileMsg += `💎 *Tarif:* Premium\n`;
+            profileMsg += `📅 Muddat: ${until} gacha\n`;
+        } else {
+            profileMsg += `� *Tarif:* Bepul\n`;
+        }
+
+        profileMsg += `✅ Kunlik foydalanish: ${user.used_today} / ${user.daily_limit}\n` +
+            `📝 So'z limiti: ${user.word_limit || 30} so'z\n` +
+            `🎁 Bonus: ${referralInfo.bonus_limit}\n\n` +
             `📈 *Umumiy statistika:*\n` +
             `• Jami testlar: ${stats ? stats.total_assessments : 0}\n` +
             `• O'rtacha ball: ${stats ? Math.round(stats.avg_overall) : 0}/100`;
@@ -444,9 +456,9 @@ class CommandHandler {
 
         const users = await database.getAllUsers();
         let msg = `👥 *Foydalanuvchilar ro'yxati (oxirgi 15 ta):*\n\n`;
-        
+
         const inlineKeyboard = [];
-        
+
         users.slice(0, 15).forEach(u => {
             const firstName = (u.first_name || 'Foydalanuvchi').replace(/[_*`\[\]()]/g, '\\$&');
             const username = u.username ? `(@${u.username.replace(/[_*`\[\]()]/g, '\\$&')})` : "(yo'q)";
@@ -465,7 +477,7 @@ class CommandHandler {
             });
             try {
                 await ctx.answerCbQuery();
-            } catch (e) {}
+            } catch (e) { }
         } else {
             await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(inlineKeyboard)).catch(e => {
                 console.error('Error replying in handleUsers:', e);
@@ -496,7 +508,7 @@ class CommandHandler {
 
         const users = await database.getAllUsers();
         await ctx.reply(`Xabar ${users.length} ta foydalanuvchiga yuborilmoqda...`, Markup.removeKeyboard());
-        
+
         ctx.session.state = null;
         let successCount = 0;
         let failCount = 0;
@@ -505,10 +517,10 @@ class CommandHandler {
             try {
                 // Skip the admin who is sending the message to avoid duplicate or error in copyMessage logic if needed
                 // but usually it's fine to send to everyone.
-                
+
                 await ctx.telegram.copyMessage(user.telegram_id, ctx.chat.id, ctx.message.message_id);
                 successCount++;
-                
+
                 // Rate limiting: 30 messages per second is the limit. 50ms = 20 msg/sec.
                 if (successCount % 20 === 0) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -536,7 +548,7 @@ class CommandHandler {
 
             const isTeacher = user.is_teacher === 1;
             const firstName = (user.first_name || 'Foydalanuvchi').replace(/[_*`\[\]()]/g, '\\$&');
-            
+
             const msg = `👤 *Foydalanuvchini boshqarish:*\n\n` +
                 `Ism: ${firstName}\n` +
                 `ID: \`${user.telegram_id}\`\n` +
@@ -554,11 +566,11 @@ class CommandHandler {
                 console.error('Error editing message in handleManageUser:', e);
                 await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
             });
-            
-            await ctx.answerCbQuery().catch(() => {});
+
+            await ctx.answerCbQuery().catch(() => { });
         } catch (error) {
             console.error('Error in handleManageUser:', error);
-            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => {});
+            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => { });
         }
     }
 
@@ -571,12 +583,12 @@ class CommandHandler {
             const isTeacher = status === '1';
 
             await database.setTeacher(targetId, isTeacher);
-            
+
             await ctx.answerCbQuery(isTeacher ? 'O\'qituvchi etib tayinlandi!' : 'O\'qituvchilikdan olindi!');
             return this.handleManageUser(ctx);
         } catch (error) {
             console.error('Error in handleToggleTeacher:', error);
-            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => {});
+            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => { });
         }
     }
 
@@ -586,7 +598,7 @@ class CommandHandler {
             if (!isAdmin) return;
 
             const [_, targetId, amount] = ctx.match;
-            
+
             const user = await database.getUserByTelegramId(targetId);
 
             if (user) {
@@ -598,7 +610,7 @@ class CommandHandler {
             await ctx.answerCbQuery('Foydalanuvchi topilmadi.', { show_alert: true });
         } catch (error) {
             console.error('Error in handleAddLimit:', error);
-            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => {});
+            await ctx.answerCbQuery('Xatolik yuz berdi.', { show_alert: true }).catch(() => { });
         }
     }
 
@@ -625,9 +637,9 @@ class CommandHandler {
             [Markup.button.callback('🔙 Orqaga', 'back_to_teacher_menu')]
         ]);
 
-        await ctx.reply('🤖 *AI yordamida matn yaratish*\n\nQanday turdagi matn yoki gap yaratmoqchisiz:', { 
-            parse_mode: 'Markdown', 
-            ...aiMenu 
+        await ctx.reply('🤖 *AI yordamida matn yaratish*\n\nQanday turdagi matn yoki gap yaratmoqchisiz:', {
+            parse_mode: 'Markdown',
+            ...aiMenu
         });
     }
 
@@ -642,9 +654,9 @@ class CommandHandler {
             [Markup.button.callback('🔙 Orqaga', 'back_to_teacher_menu')]
         ]);
 
-        await ctx.reply('🤖 *AI yordamida so\'z yaratish*\n\nQanday darajadagi so\'z yaratmoqchisiz:', { 
-            parse_mode: 'Markdown', 
-            ...aiMenu 
+        await ctx.reply('🤖 *AI yordamida so\'z yaratish*\n\nQanday darajadagi so\'z yaratmoqchisiz:', {
+            parse_mode: 'Markdown',
+            ...aiMenu
         });
     }
 
@@ -654,22 +666,22 @@ class CommandHandler {
 
         const difficulty = ctx.match[1];
         const type = ctx.match[2];
-        
+
         try {
             await ctx.answerCbQuery("AI yordamida yaratilmoqda... ⏳");
-            
+
             const generatedText = await geminiService.generateTestText(difficulty, type);
-            
+
             // Add to database
             await database.addTestWord(generatedText);
-            
+
             const typeText = type === 'word' ? 'So\'z' : type === 'sentence' ? 'Gap' : 'Matn';
             const difficultyText = difficulty === 'easy' ? 'Oson' : difficulty === 'medium' ? 'O\'rta' : 'Qiyin';
-            
-            await ctx.reply(`✅ *AI tomonidan yaratildi*\n\n🎯 *${typeText}* (${difficultyText})\n\n"${generatedText}"\n\n✅ Matn testlar ro\'yxatiga qo\'shildi!`, { 
-                parse_mode: 'Markdown' 
+
+            await ctx.reply(`✅ *AI tomonidan yaratildi*\n\n🎯 *${typeText}* (${difficultyText})\n\n"${generatedText}"\n\n✅ Matn testlar ro\'yxatiga qo\'shildi!`, {
+                parse_mode: 'Markdown'
             });
-            
+
         } catch (error) {
             console.error('AI generation error:', error);
             await ctx.reply('❌ AI matn yaratishda xatolik yuz berdi. Iltimos, qayta urinib ko\'ring.');
@@ -686,14 +698,14 @@ class CommandHandler {
                 return ctx.reply('❌ O\'qituvchi ma\'lumotlari topilmadi.');
             }
             const students = await database.getTeacherStudents(teacher.id);
-            
+
             if (!students || students.length === 0) {
                 const assignMenu = Markup.inlineKeyboard([
                     [Markup.button.callback('👥 O\'quvchi biriktirish', 'assign_student_menu')],
                     [Markup.button.callback('👥 Foydalanuvchidan biriktirish', 'assign_user_menu')],
                     [Markup.button.callback('📋 Ro\'yxatdan tanlash', 'show_user_selection_for_assignment')]
                 ]);
-                return ctx.reply('👥 *O\'quvchilarim*\n\nHozircha sizga biriktirilgan o\'quvchilar yo\'q.\n\nYangi o\'quvchi biriktirish uchun pastdagi tugmalardan birini tanlang:', { 
+                return ctx.reply('👥 *O\'quvchilarim*\n\nHozircha sizga biriktirilgan o\'quvchilar yo\'q.\n\nYangi o\'quvchi biriktirish uchun pastdagi tugmalardan birini tanlang:', {
                     parse_mode: 'Markdown',
                     ...assignMenu
                 });
@@ -728,7 +740,7 @@ class CommandHandler {
 
         ctx.session = ctx.session || {};
         ctx.session.state = 'waiting_for_user_assignment';
-        
+
         await ctx.reply(
             '👥 *Foydalanuvchidan biriktirish*\n\n' +
             'Iltimos, biriktirmoqchi bo\'lgan foydalanuvchining Telegram ID sini yuboring.\n\n' +
@@ -748,16 +760,16 @@ class CommandHandler {
         try {
             const users = await database.getAllUsers();
             let msg = `👥 *O'quvchi biriktirish uchun foydalanuvchilar ro'yxati:*\n\n`;
-            
+
             const inlineKeyboard = [];
-            
+
             // Filter out teachers and admins, show only regular users
             const regularUsers = users.filter(u => u.is_teacher !== 1 && u.is_admin !== 1 && u.telegram_id !== ctx.from.id);
-            
+
             if (regularUsers.length === 0) {
                 return ctx.reply('❌ Biriktirish uchun mavjud foydalanuvchilar topilmadi.');
             }
-            
+
             regularUsers.slice(0, 15).forEach(u => {
                 const firstName = (u.first_name || 'Foydalanuvchi').replace(/[_*`\[\]()]/g, '\\$&');
                 const username = u.username ? `(@${u.username.replace(/[_*`\[\]()]/g, '\\$&')})` : "(yo'q)";
@@ -778,7 +790,7 @@ class CommandHandler {
                 });
                 try {
                     await ctx.answerCbQuery();
-                } catch (e) {}
+                } catch (e) { }
             } else {
                 await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(inlineKeyboard)).catch(e => {
                     console.error('Error replying in handleUserSelectionForAssignment:', e);
@@ -797,14 +809,14 @@ class CommandHandler {
 
         if (ctx.session?.state === 'waiting_for_user_assignment') {
             const userTelegramId = ctx.message.text.trim();
-            
+
             if (!userTelegramId || isNaN(userTelegramId)) {
                 return ctx.reply('❌ Noto\'g\'ri Telegram ID. Iltimos, faqat raqam kiriting.');
             }
 
             try {
                 const user = await database.getUserByTelegramId(parseInt(userTelegramId));
-                
+
                 if (!user) {
                     return ctx.reply('❌ Bu ID ga ega bo\'lgan foydalanuvchi topilmadi. Iltimos, foydalanuvchi avval botdan "/start" buyrug\'ini borganligini tekshiring.');
                 }
@@ -820,9 +832,9 @@ class CommandHandler {
                 }
                 const teacherId = teacher.id;
                 const userId = user.id;
-                
+
                 await database.assignStudentToTeacher(teacherId, userId);
-                
+
                 // Clear session
                 delete ctx.session.state;
 
@@ -863,7 +875,7 @@ class CommandHandler {
 
         ctx.session = ctx.session || {};
         ctx.session.state = 'waiting_for_student_assignment';
-        
+
         await ctx.reply(
             '👥 *O\'quvchi biriktirish*\n\n' +
             'Iltimos, o\'quvchining Telegram ID sini yuboring.\n\n' +
@@ -882,14 +894,14 @@ class CommandHandler {
 
         if (ctx.session?.state === 'waiting_for_student_assignment') {
             const studentTelegramId = ctx.message.text.trim();
-            
+
             if (!studentTelegramId || isNaN(studentTelegramId)) {
                 return ctx.reply('❌ Noto\'g\'ri Telegram ID. Iltimos, faqat raqam kiriting.');
             }
 
             try {
                 const student = await database.getUserByTelegramId(parseInt(studentTelegramId));
-                
+
                 if (!student) {
                     return ctx.reply('❌ Bu ID ga ega bo\'lgan foydalanuvchi topilmadi. Iltimos, o\'quvchi avval botdan "/start" buyrug\'ini borganligini tekshiring.');
                 }
@@ -900,9 +912,9 @@ class CommandHandler {
                 }
                 const teacherId = teacher.id;
                 const studentId = student.id;
-                
+
                 await database.assignStudentToTeacher(teacherId, studentId);
-                
+
                 // Clear session
                 delete ctx.session.state;
 
@@ -946,10 +958,10 @@ class CommandHandler {
         }
 
         const userTelegramId = ctx.match[1];
-        
+
         try {
             const user = await database.getUserByTelegramId(parseInt(userTelegramId));
-            
+
             if (!user) {
                 return ctx.answerCbQuery('❌ Foydalanuvchi topilmadi.', { show_alert: true });
             }
@@ -965,9 +977,9 @@ class CommandHandler {
             }
             const teacherId = teacher.id;
             const userId = user.id;
-            
+
             await database.assignStudentToTeacher(teacherId, userId);
-            
+
             await ctx.answerCbQuery('✅ Foydalanuvchi muvaffaqiyatli biriktirildi!');
 
             // Show success message and refresh the list
@@ -1005,11 +1017,9 @@ class CommandHandler {
         if (!isTeacher) return;
 
         const studentId = ctx.match[1];
-        
+
         try {
-            const student = await new Promise((resolve) => {
-                database.db.get('SELECT * FROM users WHERE id = ?', [studentId], (err, row) => resolve(row));
-            });
+            const student = await database.getUserById(studentId);
 
             if (!student) {
                 return ctx.answerCbQuery('O\'quvchi topilmadi.', { show_alert: true });
@@ -1041,11 +1051,9 @@ class CommandHandler {
         if (!isTeacher) return;
 
         const studentId = ctx.match[1];
-        
+
         try {
-            const student = await new Promise((resolve) => {
-                database.db.get('SELECT * FROM users WHERE id = ?', [studentId], (err, row) => resolve(row));
-            });
+            const student = await database.getUserById(studentId);
 
             if (!student) {
                 return ctx.answerCbQuery('O\'quvchi topilmadi.', { show_alert: true });
@@ -1077,11 +1085,11 @@ class CommandHandler {
         if (!isTeacher) return;
 
         const studentId = ctx.match[1];
-        
+
         try {
             await database.removeStudentFromTeacher(ctx.from.id, studentId);
             await ctx.answerCbQuery('O\'quvchi muvaffaqiyatli olib tashlandi!');
-            
+
             // Refresh students list
             return this.handleMyStudents(ctx);
         } catch (error) {
@@ -1095,7 +1103,7 @@ class CommandHandler {
         if (!isTeacher) return;
 
         await ctx.answerCbQuery('Bekor qilindi.');
-        
+
         // Refresh students list
         return this.handleMyStudents(ctx);
     }
@@ -1110,13 +1118,13 @@ class CommandHandler {
                 return ctx.reply('❌ O\'qituvchi ma\'lumotlari topilmadi.');
             }
             const tasks = await database.getTeacherTasks(teacher.id);
-            
+
             if (!tasks || tasks.length === 0) {
                 return ctx.reply('📋 *Topshiriqlarim*\n\nHozircha topshiriqlar yo\'q.', { parse_mode: 'Markdown' });
             }
 
             let msg = `📋 *Topshiriqlarim (${tasks.length} ta):*\n\n`;
-            
+
             tasks.forEach((task, index) => {
                 const statusIcon = task.status === 'pending' ? '⏳' : task.status === 'submitted' ? '✅' : '✅';
                 const studentName = task.student_name || 'Noma\'lum';
@@ -1143,7 +1151,7 @@ class CommandHandler {
 
         if (ctx.session?.state === 'waiting_for_task_text' && ctx.session.assigningTaskTo) {
             const taskText = ctx.message.text.trim();
-            
+
             if (!taskText) {
                 return ctx.reply('❌ Topshiriq matni bo\'sh bo\'lishi mumkin emas. Iltimos, qayta yuboring.');
             }
@@ -1155,20 +1163,18 @@ class CommandHandler {
                 }
                 const teacherId = teacher.id; // Database ID
                 const studentId = ctx.session.assigningTaskTo; // Already Database ID
-                
+
                 const taskId = await database.createTask(teacherId, studentId, taskText);
-                
+
                 // Get student info for notification
-                const student = await new Promise((resolve) => {
-                    database.db.get('SELECT * FROM users WHERE id = ?', [studentId], (err, row) => resolve(row));
-                });
+                const student = await database.getUserById(studentId);
 
                 // Clear session
                 delete ctx.session.state;
                 delete ctx.session.assigningTaskTo;
 
-                await ctx.reply(`✅ *Topshiriq muvaffaqiyatli yaratildi!*\n\n📝 "${taskText}"\n👤 O\'quvchi: ${student.first_name}\n\nO\'quvchi topshiriqni "📊 Mening natijalarim" bo\'limida ko\'radi.`, { 
-                    parse_mode: 'Markdown' 
+                await ctx.reply(`✅ *Topshiriq muvaffaqiyatli yaratildi!*\n\n📝 "${taskText}"\n👤 O\'quvchi: ${student.first_name}\n\nO\'quvchi topshiriqni "📊 Mening natijalarim" bo\'limida ko\'radi.`, {
+                    parse_mode: 'Markdown'
                 });
 
                 // Notify student
@@ -1203,86 +1209,41 @@ class CommandHandler {
         const isTeacher = await database.isTeacher(ctx.from.id);
         if (!isTeacher) return;
 
-        const stats = await new Promise((resolve) => {
-            database.db.get(`
-                SELECT 
-                    (SELECT COUNT(*) FROM users) as total_users,
-                    (SELECT COUNT(*) FROM assessments) as total_assessments,
-                    (SELECT COUNT(*) FROM test_words) as total_words
-            `, (err, row) => resolve(row));
-        });
+        try {
+            const stats = await database.getGeneralStats();
 
-        const msg = `📊 *Umumiy statistika:*\n\n` +
-            `👥 Jami foydalanuvchilar: ${stats.total_users}\n` +
-            `📝 Jami tahlillar: ${stats.total_assessments}\n` +
-            `🎯 Jami test so'zlari: ${stats.total_words}`;
+            const msg = `📊 *Umumiy statistika:*\n\n` +
+                `👥 Jami foydalanuvchilar: ${stats.total_users}\n` +
+                `📝 Jami tahlillar: ${stats.total_assessments}\n` +
+                `🎯 Jami test so'zlari: ${stats.total_words}`;
 
-        await ctx.replyWithMarkdown(msg);
+            await ctx.replyWithMarkdown(msg);
+        } catch (error) {
+            console.error('Error in handleAdminStats:', error);
+            ctx.reply('Statistikani yuklashda xatolik.');
+        }
     }
 
     async handleAdminStatsOnly(ctx) {
         return this.handleAdminStats(ctx);
     }
 
-    async handleLimitInfo(ctx) {
-        let user = await database.getUserByTelegramId(ctx.from.id);
-        
-        // If user not in DB, try to save them first
-        if (!user) {
-            await database.saveUser(ctx.from);
-            user = await database.getUserByTelegramId(ctx.from.id);
-        }
-
-        if (!user) {
-            return ctx.reply("❌ Foydalanuvchi ma'lumotlarini yuklashda xatolik yuz berdi. Iltimos, /start buyrug'ini qaytadan bosing.");
-        }
-
-        const referralInfo = await database.getReferralInfo(ctx.from.id);
-        
-        let msg = `📊 *Sizning limitingiz:*\n\n`;
-        
-        if (user.is_premium) {
-            const until = new Date(user.premium_until).toLocaleDateString();
-            msg += `💎 *Premium:* Faol\n`;
-            msg += `📅 Muddat: ${until} gacha\n`;
-        } else {
-            msg += `🆓 *Tarif:* Bepul\n`;
-        }
-
-        msg += `✅ Kunlik: ${user.used_today} / ${user.daily_limit}\n`;
-        msg += `📝 So'z limiti: ${user.word_limit || 30} so'z\n`;
-        msg += `🎁 Bonus: ${referralInfo.bonus_limit}\n\n`;
-        
-        if (user.used_today >= user.daily_limit && referralInfo.bonus_limit <= 0) {
-            msg += `⚠️ Bugungi limitingiz tugadi. \n`;
-            if (!user.is_premium) {
-                msg += `Premium sotib olish uchun '💎 Premium' bo'limiga kiring yoki do'stlaringizni taklif qiling.`;
-            } else {
-                msg += `Ertaga limitingiz yangilanadi.`;
-            }
-        }
-
-        await ctx.replyWithMarkdown(msg);
-    }
-
     async handleUserResults(ctx) {
         const isTeacher = await database.isTeacher(ctx.from.id);
         if (!isTeacher) return;
 
-        database.db.all(`
-            SELECT u.first_name, a.type, a.overall_score, a.created_at 
-            FROM assessments a 
-            JOIN users u ON a.user_id = u.id 
-            ORDER BY a.created_at DESC LIMIT 10
-        `, (err, rows) => {
-            if (err || !rows) return ctx.reply('Natijalarni yuklashda xato.');
-            
+        try {
+            const rows = await database.getRecentAssessments(10);
+
             let msg = `📋 *Oxirgi 10 ta natija:*\n\n`;
             rows.forEach(r => {
                 msg += `• ${r.first_name} | ${r.type} | Ball: ${r.overall_score}\n`;
             });
             ctx.replyWithMarkdown(msg);
-        });
+        } catch (error) {
+            console.error('Error in handleUserResults:', error);
+            ctx.reply('Natijalarni yuklashda xato.');
+        }
     }
 
     async handleHelp(ctx) {
@@ -1295,11 +1256,12 @@ class CommandHandler {
             `✅ **PDF tahlil:** Nutqingiz natijalarini professional PDF hisobot ko'rinishida oling.\n\n` +
             `🎁 **Siz uchun 3 ta bepul imkoniyat tayyor!**\n\n` +
             `👇 Hoziroq /start tugmasini bosing va nutqingizni sinab ko'ring!`;
-        
+
         await ctx.replyWithMarkdown(helpMessage);
     }
 
-    async handlePremium(ctx) {
+    async handleTariffPlan(ctx) {
+        const user = await database.getUserByTelegramId(ctx.from.id);
         const tariffs = await database.getTariffs();
         const cardNum = await database.getSetting('card_number');
         const cardHolder = await database.getSetting('card_holder') || '';
@@ -1308,34 +1270,43 @@ class CommandHandler {
             return ctx.reply("⚠️ Hozirda faol tariflar mavjud emas. Iltimos, keyinroq urinib ko'ring.");
         }
 
-        let msg = `💎 *Premium Obuna Bo'lish*\n\n`;
-        msg += `Premium obuna bilan siz kunlik limitlarni oshirishingiz va botning barcha imkoniyatlaridan cheklovsiz foydalanishingiz mumkin.\n\n`;
-        msg += `📋 *Tariflar:*\n`;
-        
-        const buttons = tariffs.map(t => [Markup.button.callback(`${t.name} - ${t.price.toLocaleString()} so'm`, `select_tariff_${t.id}`)]);
-        
-        tariffs.forEach(t => {
-            msg += `• *${t.name}*: ${t.price.toLocaleString()} so'm / ${t.duration_days} kun (${t.limit_per_day} limit/kun)\n`;
-        });
+        let msg = `💰 *Tarif rejalari*\n\n`;
 
-        msg += `\n💳 *To'lov usuli:*\n`;
-        if (cardNum) {
-            msg += `Karta: \`${cardNum}\`\n`;
-            if (cardHolder) msg += `Ega: ${cardHolder}\n`;
+        // Show current tariff
+        if (user.is_premium) {
+            const until = new Date(user.premium_until).toLocaleDateString();
+            msg += `✅ *Sizning joriy tarifingiz:* Premium 💎\n`;
+            msg += `� Amal qilish muddati: ${until} gacha\n\n`;
         } else {
-            msg += `_Karta ma'lumotlari hali qo'shilmagan._\n`;
+            msg += `🆓 *Sizning joriy tarifingiz:* Bepul (Free)\n`;
+            msg += `ℹ️ Premium tarifga o'tib, kunlik limitlarni oshirishingiz mumkin.\n\n`;
         }
 
-        msg += `\n📝 *Qo'llanma:*\n`;
-        msg += `1. O'zingizga ma'qul tarifni tanlang.\n`;
-        msg += `2. Yuqoridagi kartaga tarif narxini o'tkazing.\n`;
-        msg += `3. To'lov chekini (rasm) va ma'lumotlaringizni botga yuboring.\n`;
-        msg += `4. Admin tasdiqlaganidan so'ng Premium faollashadi.`;
+        msg += `📋 *Mavjud tariflar:*\n`;
 
+        tariffs.forEach(t => {
+            msg += `\n*${t.name}*:\n`;
+            msg += `• Narxi: ${t.price.toLocaleString()} so'm\n`;
+            msg += `• Muddati: ${t.duration_days} kun\n`;
+            msg += `• Kunlik limit: ${t.limit_per_day} ta\n`;
+            msg += `• So'z limiti: ${t.word_limit} ta gacha\n`;
+        });
+
+        msg += `\n� *To'lov qilish tartibi:*\n`;
+        msg += `1. O'zingizga ma'qul tarif ostidagi 'Sotib olish' tugmasini bosing.\n`;
+        msg += `2. Yuqoridagi karta raqamiga tarif narxini o'tkazing.\n`;
+        msg += `3. To'lov chekini (rasm/screenshot) botga yuboring.\n\n`;
+
+        if (cardNum) {
+            msg += `💳 Karta: \`${cardNum}\`\n`;
+            if (cardHolder) msg += `👤 Ega: ${cardHolder}\n`;
+        }
+
+        const buttons = tariffs.map(t => [Markup.button.callback(`Sotib olish: ${t.name}`, `select_tariff_${t.id}`)]);
         const keyboard = Markup.inlineKeyboard(buttons);
-        
+
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(() => {});
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(() => { });
             await ctx.answerCbQuery();
         } else {
             await ctx.replyWithMarkdown(msg, keyboard);
@@ -1357,7 +1328,7 @@ class CommandHandler {
             `Rasm bilan birga izohda quyidagilarni yozing:\n` +
             `1. Ism va familiyangiz\n` +
             `2. Qaysi kartadan pul o'tkazilgani (oxirgi 4 raqami)`, { parse_mode: 'Markdown' });
-        
+
         await ctx.answerCbQuery();
     }
 
@@ -1387,7 +1358,7 @@ class CommandHandler {
             ];
 
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => {});
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => { });
             } else {
                 await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
             }
@@ -1410,10 +1381,10 @@ class CommandHandler {
         if (!ctx.session) {
             ctx.session = {};
         }
-        
+
         ctx.session.state = 'waiting_for_card_info';
         console.log('Session state set to waiting_for_card_info');
-        
+
         await ctx.reply('💳 Yangi karta ma\'lumotlarini quyidagi formatda yuboring:\n\n`KARTA_RAKAMI KARTA_EGASI`\n\nMisol: `8600123456789012 Eshmat Toshmatov`\n\nBekor qilish uchun /cancel deb yozing.', { parse_mode: 'Markdown' });
         await safeAnswerCbQuery(ctx);
     }
@@ -1421,7 +1392,7 @@ class CommandHandler {
     async handleSetCard(ctx) {
         console.log('handleSetCard called by:', ctx.from.id);
         console.log('Session state:', ctx.session?.state);
-        
+
         const isAdmin = await database.isAdmin(ctx.from.id);
         console.log('Is admin:', isAdmin);
         if (!isAdmin) {
@@ -1431,7 +1402,7 @@ class CommandHandler {
 
         const text = ctx.message.text;
         console.log('Received text:', text);
-        
+
         if (text === '/cancel') {
             // Ensure session exists before clearing
             if (ctx.session) {
@@ -1443,7 +1414,7 @@ class CommandHandler {
         // Split by space but handle multiple spaces
         const parts = text.trim().split(/\s+/);
         console.log('Text parts:', parts);
-        
+
         if (parts.length < 2) {
             console.log('Invalid format - parts length:', parts.length);
             return ctx.reply("❌ Format noto'g'ri. Iltimos, karta raqami va egasini yozing.\n\nMisol: `8600123456789012 Eshmat Toshmatov`", { parse_mode: 'Markdown' });
@@ -1466,7 +1437,7 @@ class CommandHandler {
         if (ctx.session) {
             ctx.session.state = null;
         }
-        
+
         await ctx.reply(`✅ Karta muvaffaqiyatli saqlandi:\n\n💳 Karta: \`${cardNum}\`\n👤 Ega: \`${cardHolder}\``, { parse_mode: 'Markdown', ...this.adminMenu });
     }
 
@@ -1494,7 +1465,7 @@ class CommandHandler {
             buttons.push([Markup.button.callback('🔙 Orqaga', 'admin_panel_main')]);
 
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => {});
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => { });
                 await ctx.answerCbQuery();
             } else {
                 await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
@@ -1552,7 +1523,7 @@ class CommandHandler {
             const modelStats = await database.getApiStats();
 
             let msg = `📊 *Ravon AI Monitoring*\n\n`;
-            
+
             msg += `📈 *Umumiy statistika:*\n`;
             msg += `• Jami so'rovlar: \`${totalUsage.total_requests}\`\n`;
             msg += `• Jami prompt tokenlar: \`${totalUsage.total_prompt_tokens?.toLocaleString() || 0}\`\n`;
@@ -1576,7 +1547,7 @@ class CommandHandler {
             ];
 
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => {});
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }).catch(() => { });
                 await ctx.answerCbQuery();
             } else {
                 await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
@@ -1610,7 +1581,7 @@ class CommandHandler {
         for (const p of payments) {
             let msg = `📩 *Yangi To'lov So'rovi (ID: ${p.id})*\n\n`;
             msg += `👤 Foydalanuvchi: ${p.first_name} (@${p.username || 'yo\'q'})\n`;
-            msg += `💎 Tarif: ${p.tariff_name} (${p.price.toLocaleString()} so'm)\n`;
+            msg += `💎 Tarif: ${p.tariff_name} (${(p.tariff_price || 0).toLocaleString()} so'm)\n`;
             msg += `📝 Tafsilotlar: ${p.payment_details}\n`;
             msg += `📅 Sana: ${p.created_at}`;
 
@@ -1633,14 +1604,17 @@ class CommandHandler {
         if (!payment) return ctx.answerCbQuery("To'lov topilmadi.");
 
         await database.updatePaymentStatus(paymentId, 'approved');
-        await database.approvePremium(payment.user_id, payment.duration_days, payment.limit_per_day, payment.word_limit || 30);
+
+        // Use tariff word limit or a safer default (100) instead of 30
+        const wordLimit = payment.word_limit || payment.tariff_word_limit || 100;
+        await database.approvePremium(payment.user_id, payment.duration_days, payment.limit_per_day, wordLimit);
 
         await ctx.answerCbQuery("✅ To'lov tasdiqlandi!");
         await ctx.editMessageCaption(`✅ *To'lov tasdiqlandi (ID: ${paymentId})*`, { parse_mode: 'Markdown' });
 
         // Notify user
         try {
-            await ctx.telegram.sendMessage(payment.telegram_id, 
+            await ctx.telegram.sendMessage(payment.telegram_id,
                 `🎉 *Tabriklaymiz!* Sizning to'lovingiz tasdiqlandi.\n\n` +
                 `💎 Premium obuna faollashdi!\n` +
                 `📅 Amal qilish muddati: ${payment.duration_days} kun\n` +
@@ -1667,7 +1641,7 @@ class CommandHandler {
 
         // Notify user
         try {
-            await ctx.telegram.sendMessage(payment.telegram_id, 
+            await ctx.telegram.sendMessage(payment.telegram_id,
                 `❌ Kechirasiz, sizning to'lovingiz rad etildi.\n` +
                 `Iltimos, ma'lumotlarni qaytadan tekshirib ko'ring yoki admin bilan bog'laning.`, { parse_mode: 'Markdown' });
         } catch (e) {
@@ -1679,13 +1653,13 @@ class CommandHandler {
         const userId = ctx.from.id;
         const botUsername = ctx.botInfo.username;
         const referralLink = `https://t.me/${botUsername}?start=${userId}`;
-        
+
         const referralInfo = await database.getReferralInfo(userId);
         const count = referralInfo.referral_count;
         const bonusLimit = referralInfo.bonus_limit;
-        
+
         const nextReward = 3 - (count % 3);
-        
+
         let msg = `🔗 *Sizning referal havolangiz:*\n\n` +
             `\`${referralLink}\`\n\n` +
             `👥 Taklif qilingan do'stlar: *${count}* ta\n` +
@@ -1693,7 +1667,7 @@ class CommandHandler {
             `⭐ *Bonus tizimi:*\n` +
             `Har 3 ta taklif qilingan do'stingiz uchun sizga *+3 ta bonus limit* beriladi!\n\n` +
             `💡 Bonus limitlar kunlik limitingiz tugaganda avtomatik ishlatiladi va ular hech qachon yo'qolmaydi.\n\n`;
-            
+
         if (nextReward === 3 && count > 0) {
             msg += `✅ Tabriklaymiz! Oxirgi 3 ta taklif uchun bonus oldingiz.`;
         } else {
@@ -1711,70 +1685,62 @@ class CommandHandler {
         try {
             const telegramId = ctx.from.id;
             const user = await database.getUserByTelegramId(telegramId);
-            
+
             if (!user) {
                 return ctx.reply("Foydalanuvchi topilmadi. Iltimos, /start buyrug'ini bosing.");
             }
 
             const userId = user.id; // Database ID
             const isTeacher = await database.isTeacher(telegramId);
-            
-            if (isTeacher) {
-                // Show teacher statistics
-                const stats = await assessmentService.getUserStats(userId);
-                
-                if (!stats) {
-                    await ctx.reply("Siz hali audio yubormagansiz. Iltimos, birinchi bo'lib audio yuboring!");
-                    return;
-                }
-                
-                const statsMessage = `📈 *Sizning umumiy statistikangiz*\n\n` +
-                    `📊 Jami tahlillar: ${stats.total_assessments}\n` +
-                    `⭐ O'rtacha umumiy ball: ${Math.round(stats.avg_overall)}/100\n` +
-                    `🎯 O'rtacha aniqlik: ${Math.round(stats.avg_accuracy)}/100\n` +
-                    `🗣 O'rtacha ravonlik: ${Math.round(stats.avg_fluency)}/100`;
-                
-                await ctx.replyWithMarkdown(statsMessage);
+
+            // Show user statistics and leaderboard for everyone
+            const stats = await database.getUserStats(telegramId);
+            const leaderboard = await database.getLeaderboard(10, 1);
+
+            let statsMessage = `📈 *Sizning umumiy statistikangiz*\n\n` +
+                `📊 Jami tahlillar: ${stats.total_assessments || 0}\n` +
+                `⭐ O'rtacha umumiy ball: ${Math.round(stats.avg_overall || 0)}/100\n` +
+                `🎯 O'rtacha aniqlik: ${Math.round(stats.avg_accuracy || 0)}/100\n` +
+                `🗣 O'rtacha ravonlik: ${Math.round(stats.avg_fluency || 0)}/100\n\n`;
+
+            if (leaderboard.length > 0) {
+                statsMessage += `🏆 *TOP 10 Foydalanuvchilar:*\n\n`;
+                leaderboard.forEach((u, index) => {
+                    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '👤';
+                    const name = u.name;
+                    const score = Math.round(u.avgOverall);
+                    const count = u.total;
+                    statsMessage += `${medal} ${index + 1}. ${name} — *${score} ball* (${count} ta)\n`;
+                });
             } else {
-                // Show student tasks and assignments
-                const tasks = await database.getStudentTasks(userId);
-                
-                if (!tasks || tasks.length === 0) {
-                    await ctx.reply('📋 *Mening topshiriqlarim*\n\nHozircha sizda topshiriqlar yo\'q.', { parse_mode: 'Markdown' });
-                    return;
-                }
-                
-                let msg = `📋 *Mening topshiriqlarim (${tasks.length} ta):*\n\n`;
-                const buttons = [];
-                
+                statsMessage += `🏆 *Reyting:* Hali ma'lumotlar yo'q.`;
+            }
+            // Start building the final message
+            let finalMessage = statsMessage;
+            const tasks = await database.getStudentTasks(userId);
+            let buttons = [];
+
+            if (tasks && tasks.length > 0) {
+                finalMessage += `\n📋 *Mening topshiriqlarim (${tasks.length} ta):*\n`;
                 tasks.forEach((task, index) => {
-                    const statusIcon = task.status === 'pending' ? '⏳' : task.status === 'submitted' ? '✅' : '📝';
+                    const statusIcon = task.status === 'pending' ? '⏳' : '✅';
                     const scoreText = task.overall_score !== null ? ` - ${task.overall_score} ball` : '';
-                    const statusText = task.status === 'pending' ? 'Bajarilishi kerak' : `Topshirilgan${scoreText}`;
-                    
-                    msg += `${index + 1}. ${statusIcon} *${statusText}*\n`;
-                    msg += `📝 "${task.task_text}"\n`;
-                    msg += `👨‍🏫 O\'qituvchi: ${task.teacher_name}\n`;
-                    msg += `📅 Berilgan: ${task.created_at.split(' ')[0]}\n`;
-                    if (task.due_date) {
-                        msg += `⏰ Muddati: ${task.due_date}\n`;
-                    }
-                    msg += `\n`;
-                    
-                    if (task.status === 'pending') {
-                        buttons.push([Markup.button.callback(`🎯 Bajarish: ${task.task_text.substring(0, 20)}...`, `start_task_${task.id}`)]);
-                    } else if (task.status === 'submitted') {
-                        buttons.push([Markup.button.callback(`📊 Ko'rish: ${task.task_text.substring(0, 20)}...`, `view_task_${task.id}`)]);
+
+                    if (task.status === 'pending' || (index < 3 && task.status === 'submitted')) {
+                        finalMessage += `${statusIcon} "${task.task_text.substring(0, 30)}${task.task_text.length > 30 ? '...' : ''}"${scoreText}\n`;
+
+                        if (task.status === 'pending') {
+                            buttons.push([Markup.button.callback(`🎯 Bajarish`, `start_task_${task.id}`)]);
+                        }
                     }
                 });
-                
-                if (buttons.length > 0) {
-                    await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(buttons));
-                } else {
-                    await ctx.replyWithMarkdown(msg);
-                }
             }
-            
+
+            if (buttons.length > 0) {
+                await ctx.replyWithMarkdown(finalMessage, Markup.inlineKeyboard(buttons));
+            } else {
+                await ctx.replyWithMarkdown(finalMessage);
+            }
         } catch (error) {
             console.error('Stats command error:', error);
             await ctx.reply("Kechirasiz, ma'lumotlarni olishda xatolik yuz berdi.");
@@ -1784,7 +1750,7 @@ class CommandHandler {
     async handleStartTask(ctx) {
         const taskId = ctx.match[1];
         console.log('handleStartTask called with taskId:', taskId);
-        
+
         try {
             const user = await database.getUserByTelegramId(ctx.from.id);
             if (!user) {
@@ -1793,30 +1759,30 @@ class CommandHandler {
 
             const task = await database.getTaskById(taskId);
             console.log('Retrieved task:', task);
-            
+
             if (!task) {
                 console.log('Task not found for ID:', taskId);
                 return ctx.answerCbQuery('❌ Topshiriq topilmadi.', { show_alert: true });
             }
-            
+
             // Verify this task belongs to the current user
             if (task.student_id !== user.id) {
                 console.log('Task belongs to different user. Task student_id:', task.student_id, 'Current user DB ID:', user.id);
                 return ctx.answerCbQuery('❌ Bu topshiriq sizga tegishli emas.', { show_alert: true });
             }
-            
+
             if (task.status !== 'pending') {
                 console.log('Task not pending. Status:', task.status);
                 return ctx.answerCbQuery('❌ Bu topshiriq allaqachon bajarilgan.', { show_alert: true });
             }
-            
+
             // Set session state for task completion
             ctx.session = ctx.session || {};
             ctx.session.currentTaskId = taskId;
             ctx.session.state = 'completing_task';
-            
+
             await ctx.answerCbQuery();
-            
+
             const taskMessage = `🎯 *Topshiriqni bajarish*\n\n` +
                 `📝 *Topshiriq:* "${task.task_text}"\n` +
                 `👨‍🏫 O\'qituvchi: ${task.teacher_name}\n` +
@@ -1824,15 +1790,15 @@ class CommandHandler {
                 `🎤 *Iltimos, quyidagi matnni o'qing va audio yuboring:*\n\n` +
                 `"${task.task_text}"\n\n` +
                 `💡 *Ko\'rsatma:* Matnni baland va aniq o'qing. Audio tugmasini bosib, yozib oling.`;
-            
-            await ctx.editMessageText(taskMessage, { 
+
+            await ctx.editMessageText(taskMessage, {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
                     [Markup.button.callback('🔙 Orqaga', 'back_to_stats')],
                     [Markup.button.callback('❌ Bekor qilish', 'cancel_task')]
                 ])
             });
-            
+
         } catch (error) {
             console.error('Start task error:', error);
             await ctx.answerCbQuery('❌ Xatolik yuz berdi.', { show_alert: true });
@@ -1841,7 +1807,7 @@ class CommandHandler {
 
     async handleViewTask(ctx) {
         const taskId = ctx.match[1];
-        
+
         try {
             const user = await database.getUserByTelegramId(ctx.from.id);
             if (!user) {
@@ -1849,21 +1815,21 @@ class CommandHandler {
             }
 
             const task = await database.getTaskById(taskId);
-            
+
             if (!task) {
                 return ctx.answerCbQuery('❌ Topshiriq topilmadi.', { show_alert: true });
             }
-            
+
             // Verify this task belongs to the current user
             if (task.student_id !== user.id) {
                 return ctx.answerCbQuery('❌ Bu topshiriq sizga tegishli emas.', { show_alert: true });
             }
-            
+
             await ctx.answerCbQuery();
-            
+
             let statusText = '';
             let statusIcon = '';
-            
+
             if (task.status === 'submitted') {
                 statusText = 'Topshirilgan';
                 statusIcon = '✅';
@@ -1871,31 +1837,31 @@ class CommandHandler {
                 statusText = 'Baholangan';
                 statusIcon = '📊';
             }
-            
+
             let taskMessage = `📋 *Topshiriq ma\'lumotlari*\n\n` +
                 `${statusIcon} *Holati:* ${statusText}\n` +
                 (task.overall_score !== null ? `📊 *Natija:* ${task.overall_score} ball\n` : '') +
                 `📝 *Topshiriq:* "${task.task_text}"\n` +
                 `👨‍🏫 O\'qituvchi: ${task.teacher_name}\n` +
                 `📅 Berilgan: ${task.created_at.split(' ')[0]}\n`;
-            
+
             if (task.submitted_at) {
                 taskMessage += `✅ Topshirilgan: ${task.submitted_at.split(' ')[0]}\n`;
             }
-            
+
             if (task.due_date) {
                 taskMessage += `⏰ Muddati: ${task.due_date}\n`;
             }
-            
+
             taskMessage += `\n🔙 Orqaga qaytish uchun "📊 Mening natijalarim" tugmasini bosing.`;
-            
-            await ctx.editMessageText(taskMessage, { 
+
+            await ctx.editMessageText(taskMessage, {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
                     [Markup.button.callback('🔙 Orqaga', 'back_to_stats')]
                 ])
             });
-            
+
         } catch (error) {
             console.error('View task error:', error);
             await ctx.answerCbQuery('❌ Xatolik yuz berdi.', { show_alert: true });
@@ -1909,10 +1875,10 @@ class CommandHandler {
                 delete ctx.session.currentTaskId;
                 delete ctx.session.state;
             }
-            
+
             await ctx.answerCbQuery();
             await this.handleStats(ctx);
-            
+
         } catch (error) {
             console.error('Cancel task error:', error);
             await ctx.answerCbQuery('❌ Xatolik yuz berdi.', { show_alert: true });
@@ -1945,19 +1911,19 @@ class CommandHandler {
         try {
             const data = ctx.session?.lastAssessmentData;
             const type = ctx.session?.lastAssessmentType;
-            
+
             if (!data || !data.transcription) {
                 return ctx.answerCbQuery("⚠️ Ma'lumot topilmadi.", { show_alert: true });
             }
 
             await ctx.answerCbQuery("Audio tayyorlanmoqda... ⏳");
-            
+
             const textToRead = data.targetText || data.transcription;
             const audioPath = await ttsService.generateAudio(textToRead, 'en');
-            
+
             await ctx.reply(`🔊 *To'g'ri talaffuz:*\n\n_"${textToRead}"_`, { parse_mode: 'Markdown' });
             await ctx.replyWithAudio({ source: audioPath });
-            
+
             await ttsService.cleanup(audioPath);
         } catch (error) {
             console.error('Play Correct Error:', error);

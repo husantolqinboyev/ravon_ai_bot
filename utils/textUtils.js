@@ -5,10 +5,10 @@
  */
 function countWords(text) {
     if (!text || typeof text !== 'string') return 0;
-    
+
     // Remove extra whitespace and split by spaces
     const words = text.trim().split(/\s+/);
-    
+
     // Filter out empty strings
     return words.filter(word => word.length > 0).length;
 }
@@ -32,10 +32,10 @@ function getUserWordLimit(user) {
     const defaultLimits = {
         free: 30,
         basic: 70,
-        standard: 200,
-        premium: 500
+        standard: 150,
+        premium: 300
     };
-    
+
     // Determine base limit based on plan
     let baseLimit = defaultLimits.free;
     let planType = 'free';
@@ -71,7 +71,7 @@ function getUserWordLimit(user) {
             };
         }
     }
-    
+
     return {
         limit: baseLimit,
         type: planType
@@ -87,7 +87,7 @@ function getUserWordLimit(user) {
 function checkTextLimit(text, user) {
     const wordCount = countWords(text);
     const limitInfo = getUserWordLimit(user);
-    
+
     return {
         wordCount,
         limit: limitInfo.limit,

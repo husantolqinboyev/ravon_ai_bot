@@ -4,13 +4,13 @@ async function setupDefaultTariffs() {
     try {
         console.log('Setting up default tariffs...');
         
-        // Clear existing tariffs
-        await new Promise((resolve, reject) => {
-            database.db.run('DELETE FROM tariffs', (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        // Clear existing tariffs using Supabase
+        const { error: deleteError } = await database.supabase
+            .from('tariffs')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+        
+        if (deleteError) throw deleteError;
         
         // Add default tariffs
         const tariffs = [

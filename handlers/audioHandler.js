@@ -6,26 +6,35 @@ const pdfService = require('../services/pdfService');
 const database = require('../database');
 const config = require('../config');
 const { checkTextLimit } = require('../utils/textUtils');
+const audioUtils = require('../utils/audioUtils');
 
 class AudioHandler {
     async handleAudio(ctx) {
         try {
             // Check if message has audio or voice
             const audio = ctx.message.audio || ctx.message.voice;
-            
+
             if (!audio) {
                 // If it's just text, it might be for Compare or TTS
                 return this.handleText(ctx);
             }
-            
+
             // Get file info
             const fileId = audio.file_id;
             const duration = audio.duration || 0;
             const mimeType = audio.mime_type || (ctx.message.voice ? 'audio/ogg' : 'audio/mpeg');
-            
+
+            // Get user to check limits
+            const user = await database.getUserByTelegramId(ctx.from.id);
+            const maxDuration = audioUtils.getUserAudioLimit(user);
+
             // Check duration
-            if (duration > config.MAX_AUDIO_DURATION) {
-                await ctx.reply(`Audio juda uzun. Maksimal davomiylik ${config.MAX_AUDIO_DURATION} soniya.`);
+            if (duration > maxDuration) {
+                const limitMsg = maxDuration >= 60
+                    ? `${maxDuration / 60} minut`
+                    : `${maxDuration} soniya`;
+
+                await ctx.reply(`⚠️ Audio juda uzun. Sizning tarifingizda maksimal davomiylik ${limitMsg}.\n\nPremium obunada bu limit 4 minutgacha oshadi!`);
                 return;
             }
 
@@ -51,7 +60,7 @@ class AudioHandler {
                     targetText = task.task_text;
                 }
             }
-            
+
             // Send processing message
             let processingText = "Audio qabul qilindi! Tahlil qilinmoqda... ⏳";
             if (state === 'waiting_for_compare_audio') {
@@ -60,13 +69,13 @@ class AudioHandler {
                 processingText = "Topshiriq uchun audio qabul qilindi! Tahlil qilinmoqda... ⏳";
             }
             const processingMsg = await ctx.reply(processingText);
-            
+
             // Download audio file
             const fileLink = await ctx.telegram.getFileLink(fileId);
             const audioBuffer = await this.downloadAudio(fileLink.href);
-            
+
             if (!audioBuffer || audioBuffer.length === 0) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => {});
+                await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => { });
                 return ctx.reply("❌ Audioni yuklab olishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
             }
 
@@ -81,16 +90,16 @@ class AudioHandler {
             );
 
             if (!result || !result.success) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => {});
-                const errorMsg = result?.error === 'LIMIT_EXCEEDED' 
+                await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => { });
+                const errorMsg = result?.error === 'LIMIT_EXCEEDED'
                     ? "⚠️ Kunlik limitingiz tugagan. Iltimos, keyinroq urinib ko'ring yoki Premium oling."
                     : "❌ Audio tahlilida xatolik yuz berdi. Iltimos, qayta urinib ko'ring.";
                 return ctx.reply(errorMsg);
             }
-            
+
             // Delete processing message and send result
-            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => {});
-            
+            await ctx.telegram.deleteMessage(ctx.chat.id, processingMsg.message_id).catch(() => { });
+
             // Store assessment data in session for PDF generation
             if (!ctx.session) {
                 ctx.session = {};
@@ -104,13 +113,13 @@ class AudioHandler {
             if (!isWordAnalysis) {
                 inlineButtons.push([Markup.button.callback('📄 PDF shaklida yuklab olish', 'download_pdf_report')]);
             }
-            
+
             const playButtonLabel = isWordAnalysis ? '🔊 So\'z audiosini olish' : '🎧 Matn audiosini eshitish';
             inlineButtons.push([Markup.button.callback(playButtonLabel, `play_correct_${type}`)]);
 
             const inlineMenu = Markup.inlineKeyboard(inlineButtons);
 
-            await ctx.reply(result.text, { 
+            await ctx.reply(result.text, {
                 parse_mode: 'Markdown',
                 ...inlineMenu
             });
@@ -120,15 +129,15 @@ class AudioHandler {
                 try {
                     const pdfMsg = await ctx.reply("📄 PDF hisobot tayyorlanmoqda... ⏳");
                     const pdfPath = await pdfService.generateReport(ctx.from, result.data, type);
-                    
-                    await ctx.replyWithDocument({ 
-                        source: pdfPath, 
-                        filename: `Talaffuz_Tahlili_${ctx.from.id}.pdf` 
+
+                    await ctx.replyWithDocument({
+                        source: pdfPath,
+                        filename: `Talaffuz_Tahlili_${ctx.from.id}.pdf`
                     }, {
                         caption: "✅ Sizning to'liq talaffuz tahlili hisobotingiz tayyor!"
                     });
-                    
-                    await ctx.telegram.deleteMessage(ctx.chat.id, pdfMsg.message_id).catch(() => {});
+
+                    await ctx.telegram.deleteMessage(ctx.chat.id, pdfMsg.message_id).catch(() => { });
                     await pdfService.cleanup(pdfPath);
                 } catch (pdfErr) {
                     console.error('Auto PDF Error:', pdfErr);
@@ -140,19 +149,19 @@ class AudioHandler {
                 delete ctx.session.state;
                 delete ctx.session.testWord;
                 delete ctx.session.compareText;
-                
+
                 // Handle task completion
                 if (type === 'task' && taskId) {
                     try {
                         await database.submitTask(taskId, result.data.assessmentId || null);
-                        
+
                         // Notify teacher if task details are available
                         if (task && task.teacher_telegram_id) {
-                             try {
-                                 const studentName = ctx.from.first_name || ctx.from.username || "O'quvchi";
-                                 const score = result.data?.overallScore || result.data?.overall_score || 0;
-                                 
-                                 let teacherMsg = `🔔 *Yangi topshiriq topshirildi!*\n\n` +
+                            try {
+                                const studentName = ctx.from.first_name || ctx.from.username || "O'quvchi";
+                                const score = result.data?.overallScore || result.data?.overall_score || 0;
+
+                                let teacherMsg = `🔔 *Yangi topshiriq topshirildi!*\n\n` +
                                     `👤 *O'quvchi:* ${studentName}\n` +
                                     `📝 *Topshiriq:* "${task.task_text}"\n` +
                                     `📊 *Natija:* ${score} ball\n\n` +
@@ -171,7 +180,7 @@ class AudioHandler {
                             "📊 Boshqa topshiriqlar uchun '📊 Mening natijalarim' bo'limiga qayting.",
                             { parse_mode: 'Markdown' }
                         );
-                        
+
                         delete ctx.session.currentTaskId;
                     } catch (taskError) {
                         console.error('Task submission error:', taskError);
@@ -179,25 +188,25 @@ class AudioHandler {
                     }
                 }
             }
-            
+
         } catch (error) {
             console.error('Audio processing error:', error);
-            
+
             let errorMessage = "Kechirasiz, audioni tahlil qila olmadim. Iltimos, qaytadan urinib ko'ring.";
-            
+
             if (error.message === 'LIMIT_EXCEEDED') {
                 const userId = ctx.from.id;
                 const botUsername = ctx.botInfo.username;
                 const referralLink = `https://t.me/${botUsername}?start=${userId}`;
-                
+
                 errorMessage = "⚠️ *Kunlik limitingiz tugagan!*\n\n" +
                     "Xavotir olmang, limitingizni osongina oshirishingiz mumkin. " +
                     "Har 3 ta taklif qilingan do'stingiz uchun sizga *+3 ta bonus limit* beriladi!\n\n" +
                     "🔗 *Sizning referal havolangiz:*\n" +
                     `\`${referralLink}\``;
-                
+
                 const shareLink = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Ingliz tili talaffuzini Ravon AI yordamida bepul tahlil qiling! 🚀")}`;
-                
+
                 await ctx.replyWithMarkdown(errorMessage, Markup.inlineKeyboard([
                     [Markup.button.url('📤 Do\'stlarga ulashish', shareLink)],
                     [Markup.button.callback('🔗 Referal bo\'limi', 'show_referral_info')]
@@ -208,7 +217,7 @@ class AudioHandler {
             } else if (error.response?.status === 401 || error.message.includes('401')) {
                 errorMessage = "⚠️ Ravon API kaliti bilan muammo yuz berdi.";
             }
-            
+
             await ctx.reply(errorMessage);
         }
     }
@@ -219,7 +228,7 @@ class AudioHandler {
 
         if (state === 'waiting_for_compare_word' || state === 'waiting_for_compare_text_long') {
             const wordCount = text.trim().split(/\s+/).length;
-            
+
             if (state === 'waiting_for_compare_word') {
                 if (wordCount > 2) {
                     return ctx.reply('⚠️ So\'z rejimida maksimal 2 ta so\'z yuborishingiz mumkin. Iltimos, qaytadan yuboring.');
@@ -239,39 +248,39 @@ class AudioHandler {
             // Check user's word limit
             const user = await database.getUserByTelegramId(ctx.from.id);
             const limitCheck = checkTextLimit(text, user);
-            
+
             if (!limitCheck.allowed) {
                 return ctx.reply(`⚠️ Matn uzunligi limitdan oshdi!\n\nSizning limitiz: ${limitCheck.limit} so'z\nYuborgan matningiz: ${limitCheck.wordCount} so'z\n\nIltimos, qisqaroq matn yuboring yoki Premium obunaga o'ting.`);
             }
-            
+
             const canProceed = await database.checkLimit(ctx.from.id);
             if (!canProceed) {
                 delete ctx.session.state;
                 const userId = ctx.from.id;
                 const botUsername = ctx.botInfo.username;
                 const referralLink = `https://t.me/${botUsername}?start=${userId}`;
-                
+
                 const msg = "⚠️ *Kunlik limitingiz tugagan!*\n\n" +
                     "Xavotir olmang, limitingizni osongina oshirishingiz mumkin. " +
                     "Har 3 ta taklif qilingan do'stingiz uchun sizga *+3 ta bonus limit* beriladi!\n\n" +
                     "🔗 *Sizning referal havolangiz:*\n" +
                     `\`${referralLink}\``;
-                
+
                 return ctx.replyWithMarkdown(msg, Markup.inlineKeyboard([
                     [Markup.button.callback('🔗 Referal bo\'limi', 'show_referral_info')]
                 ]));
             }
 
             await ctx.reply(`Matn qabul qilindi (${limitCheck.wordCount}/${limitCheck.limit} so'z). Audio tayyorlanmoqda... ⏳`);
-            
+
             try {
                 const audioPath = await ttsService.generateAudio(text, 'en');
-                
+
                 await ctx.replyWithAudio({ source: audioPath });
-                
+
                 // Cleanup temp file
                 await ttsService.cleanup(audioPath);
-                
+
                 await database.incrementUsage(ctx.from.id);
                 delete ctx.session.state;
             } catch (e) {
@@ -319,7 +328,7 @@ class AudioHandler {
     async downloadAudio(url, retries = 3) {
         for (let i = 0; i < retries; i++) {
             try {
-                const response = await axios.get(url, { 
+                const response = await axios.get(url, {
                     responseType: 'arraybuffer',
                     timeout: 15000, // 15 seconds timeout
                     headers: {
@@ -330,7 +339,7 @@ class AudioHandler {
             } catch (error) {
                 const isLastRetry = i === retries - 1;
                 const isConnReset = error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT';
-                
+
                 if (isConnReset && !isLastRetry) {
                     console.log(`Audio download failed (${error.code}), retrying... (${i + 1}/${retries})`);
                     await new Promise(resolve => setTimeout(resolve, 1500 * (i + 1))); // Exponential backoff

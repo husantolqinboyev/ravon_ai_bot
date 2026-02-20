@@ -17,19 +17,19 @@ Ushbu loyiha foydalanuvchilarning ingliz tili talaffuzini sun'iy intellekt yorda
 *   **Node.js & Telegraf:** Botning asosi va Telegram API bilan ishlash uchun.
 *   **Google Gemini AI API:** Audioni tahlil qilish, transkripsiya va talaffuz xatolarini aniqlash uchun.
 *   **Edge TTS (Microsoft):** Matnni audioga o'girish (Text-to-Speech) va to'g'ri talaffuz namunalarini yaratish uchun.
-*   **SQLite3:** Foydalanuvchilar ma'lumotlari, limitlar, referal tizimi va natijalarni saqlash uchun (Local database).
+*   **Supabase:** Bulutli ma'lumotlar bazasi (PostgreSQL). Foydalanuvchilar ma'lumotlari, limitlar, referal tizimi va natijalarni xavfsiz saqlash uchun ishlatiladi.
 *   **PDFKit:** Professional tahlil hisobotlarini PDF formatida yaratish uchun.
 
 ## 🖥 Server va Layoqat
 
-*   **Server turi:** Loyiha Node.js muhitida ishlaydi va har qanday VPS (Virtual Private Server) yoki lokal serverda (Windows/Linux) barqaror ishlashga layoqatli.
-*   **Asinxronlik:** Bot barcha so'rovlarni asinxron tartibda (async/await) bajaradi, bu esa bir vaqtning o'zida ko'plab foydalanuvchilarga xizmat ko'rsatish imkonini beradi.
-*   **Xavfsizlik:** `.env` fayli orqali API kalitlar himoyalangan va ma'lumotlar bazasi migratsiya tizimi bilan ta'minlangan.
+*   **Server turi:** Loyiha Node.js muhitida ishlaydi va har qanday VPS yoki Cloud (masalan Render, Railway) serverlarida barqaror ishlashga layoqatli.
+*   **Asinxronlik:** Bot barcha so'rovlarni asinxron tartibda (async/await) bajaradi.
+*   **Xavfsizlik:** `.env` fayli orqali API kalitlar himoyalangan va ma'lumotlar bazasi xavfsizligi Supabase RLS (Row Level Security) orqali ta'minlangan.
 
 ## 💾 Xotira hajmi va Resurslar
 
-*   **Ma'lumotlar bazasi (bot.db):** SQLite ishlatilgani sababli, 100,000 foydalanuvchi va ularning natijalari uchun taxminan **500MB - 1GB** joy yetarli bo'ladi.
-*   **Vaqtinchalik fayllar:** PDF va audio fayllar yaratilgandan so'ng darhol o'chiriladi (`cleanup` funksiyasi), bu esa disk xotirasini tejaydi.
+*   **Ma'lumotlar bazasi:** Supabase (PostgreSQL) ishlatilgani sababli, ma'lumotlar server o'chib yonganda ham o'chib ketmaydi va xavfsiz saqlanadi.
+*   **Vaqtinchalik fayllar:** PDF va audio fayllar yaratilgandan so'ng darhol o'chiriladi (`cleanup` funksiyasi).
 *   **Operativ xotira (RAM):** Bot o'rtacha **150MB - 300MB RAM** sarflaydi. Tahlil jarayonida (Gemini API bilan ishlashda) bu ko'rsatkich biroz oshishi mumkin.
 
 ---

@@ -12,7 +12,7 @@ class AssessmentService {
 
             // Step 1: Analyze audio with Gemini
             const assessment = await geminiService.analyzeAudio(audioBuffer, mimeType, type, targetText);
-            
+
             // Log API usage if available
             if (assessment._usage) {
                 try {
@@ -45,7 +45,7 @@ class AssessmentService {
 
             // Increment usage
             await database.incrementUsage(user.id);
-            
+
             // Add targetText to assessment for formatting
             assessment.targetText = targetText;
 
@@ -59,7 +59,7 @@ class AssessmentService {
                     targetText: targetText
                 }
             };
-            
+
         } catch (error) {
             console.error('Assessment processing error:', error);
             return {
@@ -87,7 +87,7 @@ class AssessmentService {
         if (type === 'compare') response = `📝 *MATN VA AUDIO TAQQOSLASH*\n`;
 
         response += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-        
+
         response += `🏆 *UMUMIY NATIJA: ${assessment.overallScore}/100*\n`;
         response += `🎓 *DARAJA: ${assessment.englishLevel}*\n\n`;
 
@@ -105,7 +105,7 @@ class AssessmentService {
         response += `_"${assessment.transcription}"_\n\n`;
 
         const feedback = assessment.detailedFeedback;
-        
+
         if (feedback.phoneticAnalysis.mispronouncedWords && feedback.phoneticAnalysis.mispronouncedWords.length > 0) {
             response += `⚠️ *XATOLAR TAHLILI:*\n`;
             feedback.phoneticAnalysis.mispronouncedWords.slice(0, 10).forEach(m => {
@@ -131,7 +131,7 @@ class AssessmentService {
 
         response += `📈 *RIVOJLANISH REJASI:*\n`;
         feedback.actionPlan.slice(0, 3).forEach(p => response += `🚀 ${p}\n`);
-        
+
         response += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
         response += `_Ravon AI • Professional Tahlil_`;
 
@@ -145,13 +145,13 @@ class AssessmentService {
             const mispronouncedWords = phoneticAnalysis.mispronouncedWords || [];
             const actionPlan = feedback.actionPlan || [];
             const score = assessment.overallScore || 0;
-            
+
             let status = "🔴 (Rivojlanish kerak)";
             if (score >= 80) status = "🟢 (Ajoyib!)";
             else if (score >= 60) status = "🟡 (Yaxshi, lekin rivojlanish kerak)";
 
             let response = `📊 *Talaffuzingiz Tahlili Tayyor! Natija: ${score}% ${status}* \n\n`;
-            
+
             if (assessment.ipa) {
                 response += `📖 *Matn Transkripsiyasi:* ${assessment.ipa}\n\n`;
             }
@@ -196,7 +196,7 @@ class AssessmentService {
             response += `✅ Taqqoslash: Bot yuborgan audio bilan o'z ovozingizni solishtirib, xatolarni tahlil qiling. \n\n`;
 
             response += `🚀 *Talaffuzni 100% ga chiqaring!* Kursimizda barcha tovushlar, urg'u qoidalari va ravon gapirish sirlari noldan o'rgatilgan. \n\n`;
-            
+
             response += `🔗 *Batafsil:* [ https://t.me/+Pl610Bsw6YA4M2Ri ] \n`;
 
             return response;
@@ -212,7 +212,7 @@ class AssessmentService {
             const phoneticAnalysis = feedback.phoneticAnalysis || {};
             const mispronouncedWords = phoneticAnalysis.mispronouncedWords || [];
             const targetWord = assessment.targetText || assessment.transcription || "Noma'lum";
-            const ipa = assessment.ipa || ""; 
+            const ipa = assessment.ipa || "";
             const score = assessment.overallScore || 0;
 
             let response = `🌟 *Tahlil Tayyor!* \n\n`;
@@ -223,7 +223,12 @@ class AssessmentService {
                 mispronouncedWords.slice(0, 5).forEach(m => {
                     const word = m.word || targetWord;
                     const error = m.phoneticError || "Talaffuzda xatolik";
+                    const tip = m.improvementTip || "";
+                    const correct = m.correctPronunciation || "";
+
                     response += `• *"${word}"* — ${error}\n`;
+                    if (correct) response += `  └ ✅ *To'g'ri talaffuz:* [/${correct}/]\n`;
+                    if (tip) response += `  └ 💡 *Qanday to'g'rilash mumkin:* ${tip}\n`;
                 });
                 response += `\n`;
             } else {
@@ -231,9 +236,9 @@ class AssessmentService {
             }
 
             response += `💡 *Maslahat:* O'z audiongizni bot audiosi bilan solishtiring va xato so'zni 5 marta qayta ayting. \n\n`;
-            
+
             response += `🚀 *Talaffuzni 100% ga chiqaring!* Kursimizda barcha tovushlar va qoidalar noldan o'rgatilgan. \n\n`;
-            
+
             response += `🔗 *Batafsil:* [ https://t.me/+Pl610Bsw6YA4M2Ri ] \n`;
 
             return response;
