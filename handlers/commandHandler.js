@@ -1693,7 +1693,7 @@ class CommandHandler {
 
         msg += `\nUshbu foydalanuvchiga qaysi tarifni bermoqchisiz?`;
 
-        const buttons = tariffs.map(t => [Markup.button.callback(`🎁 Berish: ${t.name}`, `manual_apply_tariff_${user.telegram_id}_${t.id}`)]);
+        const buttons = tariffs.map(t => [Markup.button.callback(`🎁 Berish: ${t.name}`, `mat_${user.telegram_id}_${t.id}`)]);
         buttons.push([Markup.button.callback('❌ Bekor qilish', 'admin_panel_main')]);
 
         ctx.session.state = null;

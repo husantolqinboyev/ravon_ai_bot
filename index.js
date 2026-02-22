@@ -158,7 +158,7 @@ bot.action(/toggle_teacher_(\d+)_(0|1)/, (ctx) => commandHandler.handleToggleTea
 bot.action(/add_limit_(\d+)_(\d+)/, (ctx) => commandHandler.handleAddLimit(ctx));
 bot.action('admin_users_list', (ctx) => commandHandler.handleUsers(ctx));
 bot.action('show_referral_info', (ctx) => commandHandler.handleReferral(ctx));
-bot.action(/manual_apply_tariff_(\d+)_(.+)/, (ctx) => commandHandler.handleManualTariffApply(ctx));
+bot.action(/mat_(\d+)_(.+)/, (ctx) => commandHandler.handleManualTariffApply(ctx));
 
 // AI Generation actions
 bot.action(/ai_generate_(easy|medium|hard)_(word|sentence|text)/, (ctx) => commandHandler.handleAiGenerate(ctx));
