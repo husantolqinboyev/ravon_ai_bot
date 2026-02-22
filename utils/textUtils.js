@@ -97,9 +97,23 @@ function checkTextLimit(text, user) {
     };
 }
 
+/**
+ * Escape string for Telegram HTML parse mode
+ * @param {string} str - Input string
+ * @returns {string} - Escaped string
+ */
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 module.exports = {
     countWords,
     exceedsWordLimit,
     getUserWordLimit,
-    checkTextLimit
+    checkTextLimit,
+    escapeHTML
 };

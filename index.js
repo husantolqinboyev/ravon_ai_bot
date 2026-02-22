@@ -3,6 +3,7 @@ const http = require('http');
 const https = require('https');
 const config = require('./config');
 const { safeAnswerCbQuery } = require('./utils/telegramUtils');
+const { escapeHTML } = require('./utils/textUtils');
 const commandHandler = require('./handlers/commandHandler');
 const audioHandler = require('./handlers/audioHandler');
 const database = require('./database');
@@ -262,13 +263,13 @@ bot.on(['photo', 'video', 'document'], async (ctx) => {
         for (const admin of admins) {
             try {
                 await ctx.telegram.sendPhoto(admin.telegram_id, photo.file_id, {
-                    caption: `💰 *Yangi to'lov so'rovi!*\n\n` +
-                        `👤 Foydalanuvchi: ${ctx.from.first_name} (${ctx.from.username || 'username yo\'q'})\n` +
-                        `💎 Tarif: ${tariff.name}\n` +
+                    caption: `💰 <b>Yangi to'lov so'rovi!</b>\n\n` +
+                        `👤 Foydalanuvchi: ${escapeHTML(ctx.from.first_name)} (@${escapeHTML(ctx.from.username || 'username yo\'q')})\n` +
+                        `💎 Tarif: ${escapeHTML(tariff.name)}\n` +
                         `💵 Narxi: ${tariff.price.toLocaleString()} so'm\n` +
-                        `📝 Izoh: ${caption}\n\n` +
+                        `📝 Izoh: ${escapeHTML(caption)}\n\n` +
                         `Tasdiqlash yoki rad etish uchun 'To'lov so'rovlari' bo'limiga kiring.`,
-                    parse_mode: 'Markdown'
+                    parse_mode: 'HTML'
                 });
             } catch (err) {
                 console.error(`Admin ${admin.telegram_id}ga xabar yuborishda xato:`, err);

@@ -1,6 +1,6 @@
 const { safeAnswerCbQuery, safeEditMessage } = require('../utils/telegramUtils');
 const { Markup } = require('telegraf');
-const { checkTextLimit } = require('../utils/textUtils');
+const { checkTextLimit, escapeHTML } = require('../utils/textUtils');
 const assessmentService = require('../services/assessmentService');
 const pdfService = require('../services/pdfService');
 const ttsService = require('../services/ttsService');
@@ -1579,18 +1579,18 @@ class CommandHandler {
         }
 
         for (const p of payments) {
-            let msg = `📩 *Yangi To'lov So'rovi (ID: ${p.id})*\n\n`;
-            msg += `👤 Foydalanuvchi: ${p.first_name} (@${p.username || 'yo\'q'})\n`;
-            msg += `💎 Tarif: ${p.tariff_name} (${(p.tariff_price || 0).toLocaleString()} so'm)\n`;
-            msg += `📝 Tafsilotlar: ${p.payment_details}\n`;
-            msg += `📅 Sana: ${p.created_at}`;
+            let msg = `📩 <b>Yangi To'lov So'rovi (ID: ${p.id})</b>\n\n`;
+            msg += `👤 Foydalanuvchi: ${escapeHTML(p.first_name)} (@${escapeHTML(p.username || 'yo\'q')})\n`;
+            msg += `💎 Tarif: ${escapeHTML(p.tariff_name)} (${(p.tariff_price || 0).toLocaleString()} so'm)\n`;
+            msg += `📝 Tafsilotlar: ${escapeHTML(p.payment_details)}\n`;
+            msg += `📅 Sana: ${escapeHTML(p.created_at)}`;
 
             const buttons = Markup.inlineKeyboard([
                 [Markup.button.callback('✅ Tasdiqlash', `approve_payment_${p.id}`)],
                 [Markup.button.callback('❌ Rad etish', `reject_payment_${p.id}`)]
             ]);
 
-            await ctx.replyWithPhoto(p.photo_file_id, { caption: msg, parse_mode: 'Markdown', ...buttons });
+            await ctx.replyWithPhoto(p.photo_file_id, { caption: msg, parse_mode: 'HTML', ...buttons });
         }
     }
 
@@ -1610,16 +1610,16 @@ class CommandHandler {
         await database.approvePremium(payment.user_id, payment.duration_days, payment.limit_per_day, wordLimit);
 
         await ctx.answerCbQuery("✅ To'lov tasdiqlandi!");
-        await ctx.editMessageCaption(`✅ *To'lov tasdiqlandi (ID: ${paymentId})*`, { parse_mode: 'Markdown' });
+        await ctx.editMessageCaption(`✅ <b>To'lov tasdiqlandi (ID: ${paymentId})</b>`, { parse_mode: 'HTML' });
 
         // Notify user
         try {
             await ctx.telegram.sendMessage(payment.telegram_id,
-                `🎉 *Tabriklaymiz!* Sizning to'lovingiz tasdiqlandi.\n\n` +
+                `🎉 <b>Tabriklaymiz!</b> Sizning to'lovingiz tasdiqlandi.\n\n` +
                 `💎 Premium obuna faollashdi!\n` +
                 `📅 Amal qilish muddati: ${payment.duration_days} kun\n` +
                 `🚀 Kunlik limitingiz: ${payment.limit_per_day} taga oshirildi.\n` +
-                `📝 Matn uzunligi limiti: ${payment.word_limit || 30} so'z.`, { parse_mode: 'Markdown' });
+                `📝 Matn uzunligi limiti: ${payment.word_limit || 30} so'z.`, { parse_mode: 'HTML' });
         } catch (e) {
             console.error('Notify user error:', e);
         }
@@ -1637,7 +1637,7 @@ class CommandHandler {
         await database.updatePaymentStatus(paymentId, 'rejected');
 
         await ctx.answerCbQuery("❌ To'lov rad etildi.");
-        await ctx.editMessageCaption(`❌ *To'lov rad etildi (ID: ${paymentId})*`, { parse_mode: 'Markdown' });
+        await ctx.editMessageCaption(`❌ <b>To'lov rad etildi (ID: ${paymentId})</b>`, { parse_mode: 'HTML' });
 
         // Notify user
         try {
