@@ -23,8 +23,9 @@ class CommandHandler {
             ['📚 Matnlar ro\'yxati', '📋 Oxirgi natijalar'],
             ['📊 Umumiy statistika', '👨‍🏫 O\'qituvchilar'],
             ['💳 Karta sozlamalari', '💰 Tariflar'],
-            ['📩 To\'lov so\'rovlari', '📢 E\'lon berish'],
-            ['📊 API Monitoring', '🔙 Asosiy menyu']
+            ['📩 To\'lov so\'rovlari', '💳 Qolda tarif berish'],
+            ['📢 E\'lon berish', '📊 API Monitoring'],
+            ['🔙 Asosiy menyu']
         ]).resize();
 
         this.teacherMenu = Markup.keyboard([
@@ -1646,6 +1647,87 @@ class CommandHandler {
                 `Iltimos, ma'lumotlarni qaytadan tekshirib ko'ring yoki admin bilan bog'laning.`, { parse_mode: 'Markdown' });
         } catch (e) {
             console.error('Notify user error:', e);
+        }
+    }
+
+    async handleManualTariffRequest(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        ctx.session.state = 'waiting_for_manual_tariff_user_id';
+        await ctx.reply('🆔 Tarif bermoqchi bo\'lgan foydalanuvchining Telegram ID sini yuboring:', Markup.keyboard([['❌ Bekor qilish']]).resize());
+        if (ctx.callbackQuery) await ctx.answerCbQuery();
+    }
+
+    async handleManualTariffLookup(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        const userId = ctx.message.text.trim();
+        if (userId === '❌ Bekor qilish') {
+            ctx.session.state = null;
+            return ctx.reply('Bekor qilindi.', this.adminMenu);
+        }
+
+        if (isNaN(userId)) {
+            return ctx.reply('⚠️ ID faqat raqamlardan iborat bo\'lishi kerak. Iltimos, qaytadan yuboring:');
+        }
+
+        const user = await database.getUserByTelegramId(userId);
+        if (!user) {
+            return ctx.reply('❌ Bu ID ga ega foydalanuvchi topilmadi. Iltimos, ID ni tekshirib qaytadan yuboring:');
+        }
+
+        const tariffs = await database.getTariffs();
+        if (tariffs.length === 0) {
+            return ctx.reply('⚠️ Hozirda tizimda faol tariflar yo\'q.');
+        }
+
+        let msg = `👤 <b>Foydalanuvchi ma'lumotlari:</b>\n\n`;
+        msg += `Ism: ${escapeHTML(user.first_name)}\n`;
+        msg += `ID: <code>${user.telegram_id}</code>\n`;
+        msg += `Tarif: ${user.is_premium ? '💎 Premium' : '🆓 Bepul'}\n`;
+        if (user.is_premium && user.premium_until) {
+            msg += `Muddat: ${new Date(user.premium_until).toLocaleDateString()} gacha\n`;
+        }
+
+        msg += `\nUshbu foydalanuvchiga qaysi tarifni bermoqchisiz?`;
+
+        const buttons = tariffs.map(t => [Markup.button.callback(`🎁 Berish: ${t.name}`, `manual_apply_tariff_${user.telegram_id}_${t.id}`)]);
+        buttons.push([Markup.button.callback('❌ Bekor qilish', 'admin_panel_main')]);
+
+        ctx.session.state = null;
+        await ctx.replyWithHTML(msg, Markup.inlineKeyboard(buttons));
+    }
+
+    async handleManualTariffApply(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        const [_, targetTelegramId, tariffId] = ctx.match;
+        const tariffs = await database.getTariffs();
+        const tariff = tariffs.find(t => t.id == tariffId);
+
+        if (!tariff) return ctx.answerCbQuery("Tarif topilmadi.");
+
+        const user = await database.getUserByTelegramId(targetTelegramId);
+        if (!user) return ctx.answerCbQuery("Foydalanuvchi topilmadi.");
+
+        await database.approvePremium(user.id, tariff.duration_days, tariff.limit_per_day, tariff.word_limit || 30);
+
+        await ctx.answerCbQuery("✅ Tarif muvaffaqiyatli berildi!");
+        await ctx.editMessageText(`✅ <b>${escapeHTML(user.first_name)}</b> ga <b>${escapeHTML(tariff.name)}</b> tarifi qo'lda berildi!`, { parse_mode: 'HTML' });
+
+        // Notify user
+        try {
+            await ctx.telegram.sendMessage(targetTelegramId,
+                `🎉 <b>Tabriklaymiz!</b> Admin tomonidan sizga <b>${escapeHTML(tariff.name)}</b> tarifi sovg'a qilindi!\n\n` +
+                `💎 Premium obuna faollashdi!\n` +
+                `📅 Amal qilish muddati: ${tariff.duration_days} kun\n` +
+                `🚀 Kunlik limitingiz: ${tariff.limit_per_day} taga oshirildi.\n` +
+                `📝 Matn uzunligi limiti: ${tariff.word_limit || 30} so'z.`, { parse_mode: 'HTML' });
+        } catch (e) {
+            console.error('Notify user error (manual):', e);
         }
     }
 

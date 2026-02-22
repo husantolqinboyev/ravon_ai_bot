@@ -138,6 +138,7 @@ bot.hears('💰 Tariflar', (ctx) => commandHandler.handleTariffSettings(ctx));
 bot.hears('📩 To\'lov so\'rovlari', (ctx) => commandHandler.handlePaymentRequests(ctx));
 bot.hears('📢 E\'lon berish', (ctx) => commandHandler.handleBroadcastRequest(ctx));
 bot.hears('📊 API Monitoring', (ctx) => commandHandler.handleApiMonitoring(ctx));
+bot.hears('💳 Qolda tarif berish', (ctx) => commandHandler.handleManualTariffRequest(ctx));
 
 // Admin commands with arguments
 bot.command('setcard', (ctx) => commandHandler.handleSetCard(ctx));
@@ -157,6 +158,7 @@ bot.action(/toggle_teacher_(\d+)_(0|1)/, (ctx) => commandHandler.handleToggleTea
 bot.action(/add_limit_(\d+)_(\d+)/, (ctx) => commandHandler.handleAddLimit(ctx));
 bot.action('admin_users_list', (ctx) => commandHandler.handleUsers(ctx));
 bot.action('show_referral_info', (ctx) => commandHandler.handleReferral(ctx));
+bot.action(/manual_apply_tariff_(\d+)_(.+)/, (ctx) => commandHandler.handleManualTariffApply(ctx));
 
 // AI Generation actions
 bot.action(/ai_generate_(easy|medium|hard)_(word|sentence|text)/, (ctx) => commandHandler.handleAiGenerate(ctx));
@@ -216,6 +218,10 @@ bot.on('text', async (ctx, next) => {
 
     if (ctx.session?.state === 'waiting_for_student_assignment') {
         return commandHandler.handleStudentAssignmentProcessing(ctx);
+    }
+
+    if (ctx.session?.state === 'waiting_for_manual_tariff_user_id') {
+        return commandHandler.handleManualTariffLookup(ctx);
     }
 
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
