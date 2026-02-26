@@ -1390,7 +1390,7 @@ class Database {
         }
     }
 
-    async getLeaderboard(limit = 10, minAssessments = 1) {
+    async getLeaderboard(limit = 10, minAssessments = 3) {
         try {
             const now = Date.now();
             if (this.leaderboardCache && (now - this.leaderboardLastUpdate < this.CACHE_DURATION)) {

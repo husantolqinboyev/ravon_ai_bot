@@ -532,7 +532,7 @@ class CommandHandler {
         const buttons = [
             [Markup.button.callback('📊 Natijalarim', 'back_to_stats')],
             [Markup.button.callback('🏆 Top foydalanuvchilar', 'top_users')],
-            [Markup.button.url('🔗 Admin bilan bog\'lanish', config.CHANNEL_URL)]
+            [Markup.button.url('🔗 Admin bilan bog\'lanish', config.ADMIN_USERNAME)]
         ];
         await ctx.replyWithMarkdown(profileMsg, Markup.inlineKeyboard(buttons));
     }
@@ -546,9 +546,8 @@ class CommandHandler {
             let msg = '🏆 <b>Top foydalanuvchilar</b>\n\n';
             top.forEach((u, i) => {
                 const name = escapeHTML(u.name || 'Foydalanuvchi');
-                const uname = u.username ? ` (@${escapeHTML(u.username)})` : '';
                 const avg = Math.round(u.avgOverall);
-                msg += `${i + 1}. ${name}${uname}\n`;
+                msg += `${i + 1}. ${name}\n`;
                 msg += `• O'rtacha ball: <b>${avg}</b>/100\n`;
                 msg += `• Tahlillar: <b>${u.total}</b>\n\n`;
             });

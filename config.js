@@ -20,6 +20,9 @@ module.exports = {
     // Channel Subscription Check
     REQUIRED_CHANNEL_ID: '-1003014655042',
     CHANNEL_URL: 'https://t.me/englishwithSanatbek',
+    
+    // Admin Contact
+    ADMIN_USERNAME: '@khamidovsanat',
 
     // Supabase Configuration
     SUPABASE_URL: process.env.SUPABASE_URL,
