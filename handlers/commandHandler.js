@@ -11,10 +11,9 @@ const config = require('../config');
 class CommandHandler {
     constructor() {
         this.mainMenu = Markup.keyboard([
-            ['🎲 Talaffuzni test qilish'],
-            ['📝 Matn va Audio', '🔊 Matnni audioga o\'tkazish'],
-            ['📊 Mening natijalarim', '👤 Profil'],
-            ['🔗 Referal', '💳 Tarif reja']
+            ['🎙 Talaffuzni tekshirish', '🔊 Matnni ovozga aylantirish'],
+            ['👤 Profil', '💳 Tariflar | Ko\'proq foyda olish'],
+            ['❓ Bot qanday ishlaydi?']
         ]).resize();
 
         this.adminMenu = Markup.keyboard([
@@ -149,6 +148,23 @@ class CommandHandler {
 
     async handleMainMenu(ctx) {
         await ctx.reply('🏠 Asosiy menyu:', this.mainMenu);
+    }
+
+    async handlePronunciationMenu(ctx) {
+        const menu = Markup.inlineKeyboard([
+            [Markup.button.callback('✍️ Talaffuz matnni o\'zim yozaman', 'pronunciation_write_own')],
+            [Markup.button.callback('🎲 Tasodifiy so\'z va matn', 'pronunciation_random')]
+        ]);
+        await ctx.reply('🎙 Talaffuzni tekshirish\n\nIltimos, usulni tanlang:', menu);
+    }
+
+    async handlePronunciationWriteOwn(ctx) {
+        ctx.session = ctx.session || {};
+        ctx.session.state = 'waiting_for_text_for_pronunciation';
+        await ctx.editMessageText('✍️ Iltimos, talaffuz qilmoqchi bo\'lgan matningizni yozing:').catch(async () => {
+            await ctx.reply('✍️ Iltimos, talaffuz qilmoqchi bo\'lgan matningizni yozing:');
+        });
+        await safeAnswerCbQuery(ctx).catch(() => {});
     }
 
     async processTextForPronunciation(ctx) {
@@ -353,22 +369,7 @@ class CommandHandler {
         if (!isTeacher) return;
 
         try {
-            const rows = await database.getRecentTestWords(20);
-
-            if (!rows || rows.length === 0) {
-                return ctx.reply('Hozircha matnlar mavjud emas.');
-            }
-
-            let msg = `📚 *Matnlar va so'zlar ro'yxati (oxirgi 20 ta):*\n\n`;
-            const buttons = [];
-
-            rows.forEach((r, index) => {
-                const shortText = r.word.length > 20 ? r.word.substring(0, 17) + '...' : r.word;
-                msg += `${index + 1}. ${r.word}\n\n`;
-                buttons.push([Markup.button.callback(`❌ O'chirish: ${shortText}`, `delete_text_${r.id}`)]);
-            });
-
-            ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+            return this.renderTextsPage(ctx, 0, 'word');
         } catch (err) {
             console.error('Manage Texts Error:', err);
             ctx.reply('Xatolik yuz berdi.');
@@ -383,11 +384,91 @@ class CommandHandler {
         try {
             await database.deleteTestWord(textId);
             await ctx.answerCbQuery('Matn muvaffaqiyatli o\'chirildi!');
-            ctx.deleteMessage().catch(() => { });
+            const page = ctx.session?.textsPage || 0;
+            return this.renderTextsPage(ctx, page);
         } catch (err) {
             console.error('Delete Text Error:', err);
             await ctx.answerCbQuery('O\'chirishda xatolik yuz berdi.');
         }
+    }
+
+    async renderTextsPage(ctx, page = 0, type = 'word') {
+        const rows = await database.getRecentTestWordsByType(type, 50);
+        if (!rows || rows.length === 0) {
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(`Hozircha ${type === 'word' ? 'so\'zlar' : 'matnlar'} mavjud emas.`).catch(async () => {
+                    await ctx.reply(`Hozircha ${type === 'word' ? 'so\'zlar' : 'matnlar'} mavjud emas.`);
+                });
+                await ctx.answerCbQuery().catch(() => {});
+                return;
+            }
+            return ctx.reply(`Hozircha ${type === 'word' ? 'so\'zlar' : 'matnlar'} mavjud emas.`);
+        }
+        const pageSize = 10;
+        const start = page * pageSize;
+        const pageItems = rows.slice(start, start + pageSize);
+        if (!ctx.session) ctx.session = {};
+        ctx.session.textsPage = page;
+        ctx.session.textsType = type;
+        let msg = `📚 *${type === 'word' ? 'So\'zlar' : 'Matnlar'} ro'yxati*\n\n`;
+        pageItems.forEach((r, i) => {
+            const idx = start + i + 1;
+            msg += `${idx}. ${r.word}\n`;
+        });
+        const buttons = [];
+        const tabs = [
+            Markup.button.callback(`${type === 'word' ? '✅ ' : ''}🔤 So'zlar`, 'texts_type_word'),
+            Markup.button.callback(`${type === 'text' ? '✅ ' : ''}📝 Matnlar`, 'texts_type_text')
+        ];
+        buttons.push(tabs);
+        const row1 = [];
+        const row2 = [];
+        pageItems.slice(0, 5).forEach((r, i) => {
+            row1.push(Markup.button.callback(`${i + 1}`, `delete_text_${r.id}`));
+        });
+        pageItems.slice(5, 10).forEach((r, i) => {
+            row2.push(Markup.button.callback(`${i + 6}`, `delete_text_${r.id}`));
+        });
+        if (row1.length) buttons.push(row1);
+        if (row2.length) buttons.push(row2);
+        const controls = [];
+        controls.push(Markup.button.callback('⬅️', `texts_page_${page - 1}`));
+        controls.push(Markup.button.callback('❌', 'cancel_texts_mgmt'));
+        controls.push(Markup.button.callback('➡️', `texts_page_${page + 1}`));
+        buttons.push(controls);
+        const keyboard = Markup.inlineKeyboard(buttons);
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(async () => {
+                await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
+            });
+            await ctx.answerCbQuery().catch(() => {});
+        } else {
+            await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
+        }
+    }
+
+    async handleTextsPage(ctx) {
+        const isTeacher = await database.isTeacher(ctx.from.id);
+        if (!isTeacher) return;
+        const pageStr = ctx.match[1];
+        let page = parseInt(pageStr, 10);
+        if (isNaN(page) || page < 0) page = 0;
+        const type = ctx.session?.textsType || 'word';
+        return this.renderTextsPage(ctx, page, type);
+    }
+
+    async handleTextsType(ctx) {
+        const isTeacher = await database.isTeacher(ctx.from.id);
+        if (!isTeacher) return;
+        const type = ctx.callbackQuery.data === 'texts_type_text' ? 'text' : 'word';
+        if (!ctx.session) ctx.session = {};
+        ctx.session.textsType = type;
+        return this.renderTextsPage(ctx, 0, type);
+    }
+
+    async handleCancelTexts(ctx) {
+        await ctx.answerCbQuery().catch(() => {});
+        await ctx.deleteMessage().catch(() => {});
     }
 
     async handleCompareTextAudio(ctx) {
@@ -438,7 +519,7 @@ class CommandHandler {
             profileMsg += `💎 *Tarif:* Premium\n`;
             profileMsg += `📅 Muddat: ${until} gacha\n`;
         } else {
-            profileMsg += `� *Tarif:* Bepul\n`;
+            profileMsg += `🆓 *Tarif:* Bepul\n`;
         }
 
         profileMsg += `✅ Kunlik foydalanish: ${user.used_today} / ${user.daily_limit}\n` +
@@ -448,43 +529,130 @@ class CommandHandler {
             `• Jami testlar: ${stats ? stats.total_assessments : 0}\n` +
             `• O'rtacha ball: ${stats ? Math.round(stats.avg_overall) : 0}/100`;
 
-        await ctx.replyWithMarkdown(profileMsg);
+        const buttons = [
+            [Markup.button.callback('📊 Natijalarim', 'back_to_stats')],
+            [Markup.button.callback('🏆 Top foydalanuvchilar', 'top_users')],
+            [Markup.button.url('🔗 Admin bilan bog\'lanish', config.CHANNEL_URL)]
+        ];
+        await ctx.replyWithMarkdown(profileMsg, Markup.inlineKeyboard(buttons));
+    }
+
+    async handleTopUsers(ctx) {
+        try {
+            const top = await database.getLeaderboard(10, 1);
+            if (!top || top.length === 0) {
+                return ctx.reply('Hali reyting mavjud emas.');
+            }
+            let msg = '🏆 <b>Top foydalanuvchilar</b>\n\n';
+            top.forEach((u, i) => {
+                const name = escapeHTML(u.name || 'Foydalanuvchi');
+                const uname = u.username ? ` (@${escapeHTML(u.username)})` : '';
+                const avg = Math.round(u.avgOverall);
+                msg += `${i + 1}. ${name}${uname}\n`;
+                msg += `• O'rtacha ball: <b>${avg}</b>/100\n`;
+                msg += `• Tahlillar: <b>${u.total}</b>\n\n`;
+            });
+            const buttons = [
+                [Markup.button.callback('🔄 Yangilash', 'top_users')]
+            ];
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(msg, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+                await ctx.answerCbQuery();
+            } else {
+                await ctx.reply(msg, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+            }
+        } catch (e) {
+            await ctx.reply('Reytingni olishda xatolik yuz berdi.');
+        }
     }
 
     async handleUsers(ctx) {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        const users = await database.getAllUsers();
-        let msg = `👥 *Foydalanuvchilar ro'yxati (oxirgi 15 ta):*\n\n`;
+        return this.renderUsersPage(ctx, 0, 'free');
+    }
 
-        const inlineKeyboard = [];
-
-        users.slice(0, 15).forEach(u => {
+    async renderUsersPage(ctx, page = 0, type = 'free') {
+        const rows = await database.getUsersByTariff(type, 50);
+        if (!rows || rows.length === 0) {
+            const emptyMsg = `Hozircha ${type === 'premium' ? 'premium' : 'bepul'} foydalanuvchilar mavjud emas.`;
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(emptyMsg).catch(async () => {
+                    await ctx.reply(emptyMsg);
+                });
+                await ctx.answerCbQuery().catch(() => {});
+                return;
+            }
+            return ctx.reply(emptyMsg);
+        }
+        const pageSize = 10;
+        const start = page * pageSize;
+        const pageItems = rows.slice(start, start + pageSize);
+        if (!ctx.session) ctx.session = {};
+        ctx.session.usersPage = page;
+        ctx.session.usersType = type;
+        let msg = `👥 *Foydalanuvchilar ro'yxati* — ${type === 'premium' ? '💎 Premium' : '🆓 Bepul'}\n\n`;
+        pageItems.forEach((u, i) => {
+            const idx = start + i + 1;
             const firstName = (u.first_name || 'Foydalanuvchi').replace(/[_*`\[\]()]/g, '\\$&');
             const username = u.username ? `(@${u.username.replace(/[_*`\[\]()]/g, '\\$&')})` : "(yo'q)";
-            msg += `• ${firstName} ${username} - ID: \`${u.telegram_id}\`\n`;
-            inlineKeyboard.push([Markup.button.callback(`👤 ${u.first_name} ni boshqarish`, `manage_user_${u.telegram_id}`)]);
+            msg += `${idx}. ${firstName} ${username} — ID: \`${u.telegram_id}\`\n`;
         });
-
-        if (users.length === 0) {
-            msg = " Foydalanuvchilar topilmadi.";
-        }
-
+        const buttons = [];
+        const tabs = [
+            Markup.button.callback(`${type === 'free' ? '✅ ' : ''}🆓 Bepul`, 'users_type_free'),
+            Markup.button.callback(`${type === 'premium' ? '✅ ' : ''}💎 Premium`, 'users_type_premium')
+        ];
+        buttons.push(tabs);
+        const row1 = [];
+        const row2 = [];
+        pageItems.slice(0, 5).forEach((u, i) => {
+            row1.push(Markup.button.callback(`${i + 1}`, `manage_user_${u.telegram_id}`));
+        });
+        pageItems.slice(5, 10).forEach((u, i) => {
+            row2.push(Markup.button.callback(`${i + 6}`, `manage_user_${u.telegram_id}`));
+        });
+        if (row1.length) buttons.push(row1);
+        if (row2.length) buttons.push(row2);
+        const controls = [];
+        controls.push(Markup.button.callback('⬅️', `users_page_${page - 1}`));
+        controls.push(Markup.button.callback('❌', 'cancel_users_mgmt'));
+        controls.push(Markup.button.callback('➡️', `users_page_${page + 1}`));
+        buttons.push(controls);
+        const keyboard = Markup.inlineKeyboard(buttons);
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(inlineKeyboard) }).catch(e => {
-                console.error('Error editing message in handleUsers:', e);
-                ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(inlineKeyboard));
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(async () => {
+                await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
             });
-            try {
-                await ctx.answerCbQuery();
-            } catch (e) { }
+            await ctx.answerCbQuery().catch(() => {});
         } else {
-            await ctx.replyWithMarkdown(msg, Markup.inlineKeyboard(inlineKeyboard)).catch(e => {
-                console.error('Error replying in handleUsers:', e);
-                ctx.reply(msg.replace(/[*_`]/g, ''));
-            });
+            await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
         }
+    }
+
+    async handleUsersPage(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        const pageStr = ctx.match[1];
+        let page = parseInt(pageStr, 10);
+        if (isNaN(page) || page < 0) page = 0;
+        const type = ctx.session?.usersType || 'free';
+        return this.renderUsersPage(ctx, page, type);
+    }
+
+    async handleUsersType(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        const type = ctx.callbackQuery.data === 'users_type_premium' ? 'premium' : 'free';
+        if (!ctx.session) ctx.session = {};
+        ctx.session.usersType = type;
+        return this.renderUsersPage(ctx, 0, type);
+    }
+
+    async handleCancelUsers(ctx) {
+        await ctx.answerCbQuery().catch(() => {});
+        await ctx.deleteMessage().catch(() => {});
     }
 
     async handleBroadcastRequest(ctx) {
@@ -492,47 +660,179 @@ class CommandHandler {
         if (!isAdmin) return;
 
         ctx.session = ctx.session || {};
-        ctx.session.state = 'waiting_for_broadcast_message';
-        await ctx.reply('📢 Barcha foydalanuvchilarga yuboriladigan xabarni yuboring.\n\nSiz matn, rasm, video yoki audio yuborishingiz mumkin. Media xabarlarning tagidagi izohi (caption) ham birga yuboriladi.', Markup.keyboard([['❌ Bekor qilish']]).resize());
+        ctx.session.broadcast = { buttons: [] };
+        ctx.session.state = 'broadcast_composing';
+        const kb = Markup.inlineKeyboard([
+            [Markup.button.callback('➕ Tugma qo‘shish', 'broadcast_add_button')],
+            [Markup.button.callback('🤖 Maxsus bot tugmasi', 'broadcast_add_bot_button')],
+            [Markup.button.callback('👁️ Ko‘rish', 'broadcast_preview')],
+            [Markup.button.callback('📤 Yuborish', 'broadcast_send')],
+            [Markup.button.callback('❌ Bekor qilish', 'broadcast_cancel')]
+        ]);
+        await ctx.reply('📢 Eʼlon yaratish rejimi.\n\nXabar matnini yoki mediani yuboring.\nPastdagi tugmalar orqali tagiga tugmalar qo‘shing va yuboring.', kb);
     }
 
-    async handleBroadcast(ctx) {
+    async handleBroadcastContent(ctx) {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
-
-        const messageText = ctx.message.text || ctx.message.caption || '';
-
-        if (messageText === '❌ Bekor qilish') {
-            ctx.session.state = null;
-            return ctx.reply('Bekor qilindi.', this.adminMenu);
+        ctx.session = ctx.session || {};
+        ctx.session.broadcast = ctx.session.broadcast || { buttons: [] };
+        let content = null;
+        if (ctx.message?.text) {
+            content = { type: 'text', text: ctx.message.text };
+        } else if (ctx.message?.photo) {
+            const photo = ctx.message.photo[ctx.message.photo.length - 1];
+            content = { type: 'photo', file_id: photo.file_id, caption: ctx.message.caption || '' };
+        } else if (ctx.message?.video) {
+            content = { type: 'video', file_id: ctx.message.video.file_id, caption: ctx.message.caption || '' };
+        } else if (ctx.message?.document) {
+            content = { type: 'document', file_id: ctx.message.document.file_id, caption: ctx.message.caption || '' };
+        } else if (ctx.message?.audio) {
+            content = { type: 'audio', file_id: ctx.message.audio.file_id, caption: ctx.message.caption || '' };
+        } else if (ctx.message?.voice) {
+            content = { type: 'voice', file_id: ctx.message.voice.file_id, caption: '' };
         }
+        if (!content) return;
+        ctx.session.broadcast.content = content;
+        const kb = Markup.inlineKeyboard([
+            [Markup.button.callback('➕ Tugma qo‘shish', 'broadcast_add_button')],
+            [Markup.button.callback('🤖 Maxsus bot tugmasi', 'broadcast_add_bot_button')],
+            [Markup.button.callback('👁️ Ko‘rish', 'broadcast_preview')],
+            [Markup.button.callback('📤 Yuborish', 'broadcast_send')],
+            [Markup.button.callback('❌ Bekor qilish', 'broadcast_cancel')]
+        ]);
+        await ctx.reply('✅ Kontent saqlandi. Endi tugmalarni qo‘shing yoki yuboring.', kb);
+    }
 
+    async handleBroadcastAddButtonRequest(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        ctx.session = ctx.session || {};
+        ctx.session.broadcast = ctx.session.broadcast || { buttons: [] };
+        ctx.session.state = 'broadcast_waiting_button';
+        await ctx.answerCbQuery().catch(() => {});
+        await ctx.reply('Tugma qo‘shish: "Matn | Link" ko‘rinishida yuboring.\nMisol: Ravon AI | https://t.me/ravon_ai');
+    }
+
+    async handleBroadcastAddButtonSave(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        const text = ctx.message.text || '';
+        const parts = text.split('|').map(s => s.trim());
+        if (parts.length < 2) {
+            return ctx.reply('Format noto‘g‘ri. Misol: Ravon AI | https://t.me/ravon_ai');
+        }
+        const label = parts[0];
+        const url = parts[1];
+        ctx.session.broadcast = ctx.session.broadcast || { buttons: [] };
+        ctx.session.broadcast.buttons.push({ text: label, url });
+        ctx.session.state = 'broadcast_composing';
+        await ctx.reply(`Qo‘shildi: ${label} → ${url}`);
+    }
+
+    async handleBroadcastAddBotButtonRequest(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        ctx.session = ctx.session || {};
+        ctx.session.broadcast = ctx.session.broadcast || { buttons: [] };
+        ctx.session.state = 'broadcast_waiting_bot_button';
+        await ctx.answerCbQuery().catch(() => {});
+        await ctx.reply('Maxsus bot tugmasi: "Matn | @botusername | start_param" ko‘rinishida yuboring.\nMisol: Boshlash | @ravon_ai_bot | promo123');
+    }
+
+    async handleBroadcastAddBotButtonSave(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        const text = ctx.message.text || '';
+        const parts = text.split('|').map(s => s.trim());
+        if (parts.length < 2) {
+            return ctx.reply('Format noto‘g‘ri. Misol: Boshlash | @ravon_ai_bot | promo123');
+        }
+        const label = parts[0];
+        const username = parts[1].replace('@', '');
+        const payload = parts[2] ? parts[2] : '';
+        const url = payload ? `https://t.me/${username}?start=${encodeURIComponent(payload)}` : `https://t.me/${username}`;
+        ctx.session.broadcast = ctx.session.broadcast || { buttons: [] };
+        ctx.session.broadcast.buttons.push({ text: label, url });
+        ctx.session.state = 'broadcast_composing';
+        await ctx.reply(`Qo‘shildi: ${label} → ${url}`);
+    }
+
+    async handleBroadcastPreview(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        const b = ctx.session?.broadcast;
+        if (!b || !b.content) {
+            await ctx.answerCbQuery('Avval xabar yuboring.', { show_alert: true }).catch(() => {});
+            return;
+        }
+        const keyboard = b.buttons && b.buttons.length > 0 ? Markup.inlineKeyboard(b.buttons.map(btn => [Markup.button.url(btn.text, btn.url)])) : undefined;
+        await ctx.answerCbQuery().catch(() => {});
+        if (b.content.type === 'text') {
+            await ctx.reply(b.content.text, keyboard);
+        } else if (b.content.type === 'photo') {
+            await ctx.replyWithPhoto(b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+        } else if (b.content.type === 'video') {
+            await ctx.replyWithVideo(b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+        } else if (b.content.type === 'document') {
+            await ctx.replyWithDocument(b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+        } else if (b.content.type === 'audio') {
+            await ctx.replyWithAudio(b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+        } else if (b.content.type === 'voice') {
+            await ctx.replyWithVoice(b.content.file_id, keyboard);
+        }
+    }
+
+    async handleBroadcastSend(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        const b = ctx.session?.broadcast;
+        if (!b || !b.content) {
+            await ctx.answerCbQuery('Avval xabar yuboring.', { show_alert: true }).catch(() => {});
+            return;
+        }
         const users = await database.getAllUsers();
-        await ctx.reply(`Xabar ${users.length} ta foydalanuvchiga yuborilmoqda...`, Markup.removeKeyboard());
-
-        ctx.session.state = null;
+        await ctx.answerCbQuery().catch(() => {});
+        await ctx.reply(`Yuborilmoqda: ${users.length} ta foydalanuvchi`).catch(() => {});
+        const keyboard = b.buttons && b.buttons.length > 0 ? { reply_markup: Markup.inlineKeyboard(b.buttons.map(btn => [Markup.button.url(btn.text, btn.url)])).reply_markup } : {};
         let successCount = 0;
         let failCount = 0;
-
         for (const user of users) {
             try {
-                // Skip the admin who is sending the message to avoid duplicate or error in copyMessage logic if needed
-                // but usually it's fine to send to everyone.
-
-                await ctx.telegram.copyMessage(user.telegram_id, ctx.chat.id, ctx.message.message_id);
-                successCount++;
-
-                // Rate limiting: 30 messages per second is the limit. 50ms = 20 msg/sec.
-                if (successCount % 20 === 0) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                if (b.content.type === 'text') {
+                    await ctx.telegram.sendMessage(user.telegram_id, b.content.text, keyboard);
+                } else if (b.content.type === 'photo') {
+                    await ctx.telegram.sendPhoto(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                } else if (b.content.type === 'video') {
+                    await ctx.telegram.sendVideo(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                } else if (b.content.type === 'document') {
+                    await ctx.telegram.sendDocument(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                } else if (b.content.type === 'audio') {
+                    await ctx.telegram.sendAudio(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                } else if (b.content.type === 'voice') {
+                    await ctx.telegram.sendVoice(user.telegram_id, b.content.file_id, keyboard);
                 }
-            } catch (error) {
-                console.error(`Broadcast failed for ${user.telegram_id}:`, error.message);
+                successCount++;
+                if (successCount % 20 === 0) {
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            } catch (e) {
+                console.error('Broadcast send error:', e.message);
                 failCount++;
             }
         }
+        ctx.session.state = null;
+        ctx.session.broadcast = null;
+        await ctx.reply(`✅ Yakunlandi\nMuvaffaqiyatli: ${successCount}\nXato: ${failCount}`, this.adminMenu);
+    }
 
-        await ctx.reply(`✅ E'lon yakunlandi!\n\n Muvaffaqiyatli: ${successCount}\n Xatolik: ${failCount}`, this.adminMenu);
+    async handleBroadcastCancel(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+        ctx.session.state = null;
+        ctx.session.broadcast = null;
+        await ctx.answerCbQuery().catch(() => {});
+        await ctx.reply('Bekor qilindi.', this.adminMenu);
     }
 
     async handleManageUser(ctx) {
@@ -1304,6 +1604,7 @@ class CommandHandler {
         }
 
         const buttons = tariffs.map(t => [Markup.button.callback(`Sotib olish: ${t.name}`, `select_tariff_${t.id}`)]);
+        buttons.push([Markup.button.callback('🎁 Bepul limit olish', 'show_referral_info')]);
         const keyboard = Markup.inlineKeyboard(buttons);
 
         if (ctx.callbackQuery) {
@@ -1312,6 +1613,24 @@ class CommandHandler {
         } else {
             await ctx.replyWithMarkdown(msg, keyboard);
         }
+    }
+
+    async handleHowItWorks(ctx) {
+        const msg =
+            "❓ Bot qanday ishlaydi?\n\n" +
+            "1) 🎙 Talaffuzni tekshirish:\n" +
+            "   • Matn yozing yoki tasodifiy matn tanlang\n" +
+            "   • So‘ng audioni yuboring va tahlil natijasini oling\n\n" +
+            "2) 🔊 Matnni ovozga aylantirish:\n" +
+            "   • Matn yuboring va tayyor audio faylni qabul qiling\n\n" +
+            "3) 👤 Profil:\n" +
+            "   • Tarifingiz, cheklovlar va umumiy statistika\n\n" +
+            "4) 💳 Tariflar | Ko‘proq foyda olish:\n" +
+            "   • Tariflarni ko‘ring, sotib oling yoki referal orqali bepul limit oling";
+        const buttons = [
+            [Markup.button.url('🎥 Video qo‘llanma', config.CHANNEL_URL)]
+        ];
+        await ctx.reply(msg, { ...Markup.inlineKeyboard(buttons) });
     }
 
     async handleSelectTariff(ctx) {

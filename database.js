@@ -398,9 +398,27 @@ class Database {
         }
     }
 
+    async getRecentTestWordsByType(type, limit = 50) {
+        try {
+            const isWord = type === 'word';
+            let query = this.supabase.from('test_words').select('*');
+            if (isWord) {
+                query = query.or('word.not.ilike.% % %,word.not.ilike.% % % %');
+            } else {
+                query = query.ilike('word', '% % %');
+            }
+            const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting recent test words by type:', error);
+            return [];
+        }
+    }
+
     async deleteTestWord(id) {
         try {
-            const { error } = await this.supabase
+            const { error } = await this.supabaseAdmin
                 .from('test_words')
                 .delete()
                 .eq('id', id);
@@ -423,6 +441,27 @@ class Database {
             return data || [];
         } catch (error) {
             console.error('Error getting all users:', error);
+            return [];
+        }
+    }
+
+    async getUsersByTariff(type = 'free', limit = 50) {
+        try {
+            let query = this.supabase
+                .from('users')
+                .select('*')
+                .order('last_active', { ascending: false })
+                .limit(limit);
+            if (type === 'premium') {
+                query = query.eq('is_premium', true);
+            } else {
+                query = query.eq('is_premium', false);
+            }
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting users by tariff:', error);
             return [];
         }
     }

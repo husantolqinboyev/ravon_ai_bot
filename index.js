@@ -14,6 +14,35 @@ const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
 // Middleware
 bot.use(session());
 
+// Pre-flight validation for environment
+const validateEnvironment = async () => {
+    const token = config.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+        console.error('CRITICAL: TELEGRAM_BOT_TOKEN topilmadi. .env faylida TELEGRAM_BOT_TOKEN ni sozlang.');
+        process.exit(1);
+    }
+    const tokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
+    if (!tokenPattern.test(token)) {
+        console.error('CRITICAL: TELEGRAM_BOT_TOKEN formati noto‘g‘ri. @BotFather dan olingan to‘g‘ri tokenni kiriting.');
+        process.exit(1);
+    }
+    try {
+        const me = await bot.telegram.getMe();
+        console.log(`✅ Telegram bot tekshirildi: @${me.username}`);
+    } catch (e) {
+        if (e.response?.error_code === 401) {
+            console.error('CRITICAL: 401 Unauthorized — Telegram token noto‘g‘ri yoki bekor qilingan. @BotFather dan yangi token oling va .env faylini yangilang.');
+            process.exit(1);
+        }
+        console.error('CRITICAL: Telegram bilan bog‘lanishda xato:', e.message);
+        process.exit(1);
+    }
+    if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
+        console.error('CRITICAL: SUPABASE_URL yoki SUPABASE_ANON_KEY topilmadi. .env faylini tekshiring.');
+        process.exit(1);
+    }
+};
+
 // Ensure session exists
 bot.use(async (ctx, next) => {
     if (!ctx.session) ctx.session = {};
@@ -42,12 +71,8 @@ bot.use(async (ctx, next) => {
     if (!userId) return next();
 
     // Handle Broadcast state first
-    if (ctx.session?.state === 'waiting_for_broadcast_message' && (ctx.message || ctx.editedMessage)) {
-        // Only proceed if it's NOT a cancel command
-        if (ctx.message?.text === '❌ Bekor qilish') {
-            return commandHandler.handleBroadcast(ctx);
-        }
-        return commandHandler.handleBroadcast(ctx);
+    if (ctx.session?.state === 'broadcast_composing' && (ctx.message || ctx.editedMessage)) {
+        return commandHandler.handleBroadcastContent(ctx);
     }
 
     // Skip check for Admin
@@ -109,14 +134,11 @@ bot.command('admin', (ctx) => commandHandler.handleAdmin(ctx));
 bot.command('teacher', (ctx) => commandHandler.handleTeacher(ctx));
 
 // Main Menu Handlers
-// bot.hears('🎯 Talaffuzni test qilish', (ctx) => commandHandler.handleTestPronunciation(ctx));
-bot.hears(['🎲 Tasodifiy', '🎯 Talaffuzni test qilish', '🎲 Talaffuzni test qilish'], (ctx) => commandHandler.handleRandomMenu(ctx));
-bot.hears('📝 Matn va Audio', (ctx) => commandHandler.handleCompareTextAudio(ctx));
-bot.hears(['🔊 Matnni audioga o\'tkazish', '🔊 Matnni audyoga o\'tkazish'], (ctx) => commandHandler.handleTextToAudio(ctx));
-bot.hears('📊 Mening natijalarim', (ctx) => commandHandler.handleStats(ctx));
+bot.hears('🎙 Talaffuzni tekshirish', (ctx) => commandHandler.handlePronunciationMenu(ctx));
+bot.hears('🔊 Matnni ovozga aylantirish', (ctx) => commandHandler.handleTextToAudio(ctx));
 bot.hears('👤 Profil', (ctx) => commandHandler.handleProfile(ctx));
-bot.hears('🔗 Referal', (ctx) => commandHandler.handleReferral(ctx));
-bot.hears('💳 Tarif reja', (ctx) => commandHandler.handleTariffPlan(ctx));
+bot.hears('💳 Tariflar | Ko\'proq foyda olish', (ctx) => commandHandler.handleTariffPlan(ctx));
+bot.hears('❓ Bot qanday ishlaydi?', (ctx) => commandHandler.handleHowItWorks(ctx));
 bot.hears('🏠 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 bot.hears('🔙 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 
@@ -153,6 +175,11 @@ bot.action(/select_tariff_(.+)/, (ctx) => commandHandler.handleSelectTariff(ctx)
 bot.action(/delete_tariff_(.+)/, (ctx) => commandHandler.handleDeleteTariff(ctx));
 bot.action(/approve_payment_(.+)/, (ctx) => commandHandler.handleApprovePayment(ctx));
 bot.action(/reject_payment_(.+)/, (ctx) => commandHandler.handleRejectPayment(ctx));
+bot.action('broadcast_add_button', (ctx) => commandHandler.handleBroadcastAddButtonRequest(ctx));
+bot.action('broadcast_add_bot_button', (ctx) => commandHandler.handleBroadcastAddBotButtonRequest(ctx));
+bot.action('broadcast_preview', (ctx) => commandHandler.handleBroadcastPreview(ctx));
+bot.action('broadcast_send', (ctx) => commandHandler.handleBroadcastSend(ctx));
+bot.action('broadcast_cancel', (ctx) => commandHandler.handleBroadcastCancel(ctx));
 bot.action(/manage_user_(.+)/, (ctx) => commandHandler.handleManageUser(ctx));
 bot.action(/toggle_teacher_(\d+)_(0|1)/, (ctx) => commandHandler.handleToggleTeacher(ctx));
 bot.action(/add_limit_(\d+)_(\d+)/, (ctx) => commandHandler.handleAddLimit(ctx));
@@ -191,15 +218,32 @@ bot.action(/play_correct_/, (ctx) => commandHandler.handlePlayCorrect(ctx));
 bot.action('listen_test_text', (ctx) => commandHandler.handleListenTestText(ctx));
 bot.action('confirm_test_reading', (ctx) => commandHandler.handleConfirmTestReading(ctx));
 bot.action(/random_(word|text)/, (ctx) => commandHandler.handleRandomStart(ctx));
-bot.action(/start_test_(\d+)/, (ctx) => commandHandler.handleStartTestById(ctx));
+bot.action(/start_test_(.+)/, (ctx) => commandHandler.handleStartTestById(ctx));
 bot.action('test_pronunciation_list', (ctx) => commandHandler.handleTestPronunciationList(ctx));
-bot.action(/delete_text_(\d+)/, (ctx) => commandHandler.handleDeleteText(ctx));
+bot.action(/delete_text_(.+)/, (ctx) => commandHandler.handleDeleteText(ctx));
+bot.action('pronunciation_write_own', (ctx) => commandHandler.handlePronunciationWriteOwn(ctx));
+bot.action('pronunciation_random', (ctx) => commandHandler.handleRandomMenu(ctx));
+bot.action('top_users', (ctx) => commandHandler.handleTopUsers(ctx));
+bot.action(/texts_page_(.+)/, (ctx) => commandHandler.handleTextsPage(ctx));
+bot.action('texts_type_word', (ctx) => commandHandler.handleTextsType(ctx));
+bot.action('texts_type_text', (ctx) => commandHandler.handleTextsType(ctx));
+bot.action('cancel_texts_mgmt', (ctx) => commandHandler.handleCancelTexts(ctx));
+bot.action(/users_page_(.+)/, (ctx) => commandHandler.handleUsersPage(ctx));
+bot.action('users_type_free', (ctx) => commandHandler.handleUsersType(ctx));
+bot.action('users_type_premium', (ctx) => commandHandler.handleUsersType(ctx));
+bot.action('cancel_users_mgmt', (ctx) => commandHandler.handleCancelUsers(ctx));
 
 // Audio and voice messages
 bot.on(['audio', 'voice'], (ctx) => audioHandler.handleAudio(ctx));
 
 // Text message handling for state machine and other messages
 bot.on('text', async (ctx, next) => {
+    if (ctx.session?.state === 'broadcast_waiting_button') {
+        return commandHandler.handleBroadcastAddButtonSave(ctx);
+    }
+    if (ctx.session?.state === 'broadcast_waiting_bot_button') {
+        return commandHandler.handleBroadcastAddBotButtonSave(ctx);
+    }
     if (ctx.session?.state === 'waiting_for_text_for_pronunciation') {
         return commandHandler.processTextForPronunciation(ctx);
     }
@@ -226,8 +270,8 @@ bot.on('text', async (ctx, next) => {
 
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
     const menuButtons = [
-        '🎯 Talaffuzni test qilish', '🎲 Tasodifiy', '📝 Matn va Audio', '🔊 Matnni audioga o\'tkazish', '🔊 Matnni audyoga o\'tkazish',
-        '📊 Mening natijalarim', '👤 Profil', '🔗 Referal', '💳 Tarif reja',
+        '🎙 Talaffuzni tekshirish', '🔊 Matnni ovozga aylantirish',
+        '👤 Profil', '💳 Tariflar | Ko\'proq foyda olish', '❓ Bot qanday ishlaydi?',
         '🏠 Asosiy menyu', '🔙 Asosiy menyu'
     ];
 
@@ -241,8 +285,8 @@ bot.on('text', async (ctx, next) => {
 
 // Photo handling for payment receipts
 bot.on(['photo', 'video', 'document'], async (ctx) => {
-    if (ctx.session?.state === 'waiting_for_broadcast_message') {
-        return commandHandler.handleBroadcast(ctx);
+    if (ctx.session?.state === 'broadcast_composing') {
+        return commandHandler.handleBroadcastContent(ctx);
     }
 
     if (ctx.session?.state === 'waiting_for_payment_details' && ctx.message.photo) {
@@ -342,6 +386,9 @@ process.on('uncaughtException', (error) => {
 
 // Start bot with retry logic
 const startBot = async (retries = 5) => {
+    // Validate env and token before anything else
+    await validateEnvironment();
+
     // Initialize database tables/seed data
     try {
         await database.initializeTables();
