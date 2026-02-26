@@ -1390,7 +1390,7 @@ class Database {
         }
     }
 
-    async getLeaderboard(limit = 10, minAssessments = 3) {
+    async getLeaderboard(limit = 10, minAssessments = 5) {
         try {
             const now = Date.now();
             if (this.leaderboardCache && (now - this.leaderboardLastUpdate < this.CACHE_DURATION)) {
@@ -1430,9 +1430,11 @@ class Database {
             this.leaderboardCache = Object.values(userStats)
                 .map(u => ({
                     ...u,
-                    avgOverall: u.sumOverall / u.total
+                    avgOverall: u.sumOverall / u.total,
+                    // Yangi ball: o'rtacha ball * 0.7 + foydalanish soni / 50 * 30
+                    finalScore: (u.sumOverall / u.total) * 0.7 + Math.min(u.total / 50, 1) * 30
                 }))
-                .sort((a, b) => b.avgOverall - a.avgOverall);
+                .sort((a, b) => b.finalScore - a.finalScore);
 
             this.leaderboardLastUpdate = now;
 
