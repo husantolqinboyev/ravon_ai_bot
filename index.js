@@ -1,4 +1,6 @@
 const { Telegraf, session, Markup } = require('telegraf');
+const express = require('express');
+const path = require('path');
 const http = require('http');
 const https = require('https');
 const config = require('./config');
@@ -139,6 +141,7 @@ bot.hears('🔊 Matnni ovozga aylantirish', (ctx) => commandHandler.handleTextTo
 bot.hears('👤 Profil', (ctx) => commandHandler.handleProfile(ctx));
 bot.hears('💳 Tariflar | Ko\'proq foyda olish', (ctx) => commandHandler.handleTariffPlan(ctx));
 bot.hears('❓ Bot qanday ishlaydi?', (ctx) => commandHandler.handleHowItWorks(ctx));
+bot.hears('📱 Mini App', (ctx) => commandHandler.handleMiniApp(ctx));
 bot.hears('🏠 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 bot.hears('🔙 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 
@@ -283,6 +286,31 @@ bot.on('text', async (ctx, next) => {
     return audioHandler.handleText(ctx);
 });
 
+// Handle Mini App data
+bot.on('web_app_data', async (ctx) => {
+    try {
+        const data = JSON.parse(ctx.webAppData.data.json());
+        if (data.source === 'mini_app') {
+            const action = data.action;
+            
+            // Map Mini App actions to bot handlers
+            if (action === 'check_pronunciation') return commandHandler.handlePronunciationMenu(ctx);
+            if (action === 'text_to_audio') return commandHandler.handleTextToAudio(ctx);
+            if (action === 'profile') return commandHandler.handleProfile(ctx);
+            if (action === 'tariffs') return commandHandler.handleTariffPlan(ctx);
+            
+            // Handle tariff selection
+            if (action.startsWith('select_tariff_')) {
+                const tariffId = action.replace('select_tariff_', '');
+                ctx.match = [null, tariffId];
+                return commandHandler.handleSelectTariff(ctx);
+            }
+        }
+    } catch (error) {
+        console.error('Web App Data Error:', error);
+    }
+});
+
 // Photo handling for payment receipts
 bot.on(['photo', 'video', 'document'], async (ctx) => {
     if (ctx.session?.state === 'broadcast_composing') {
@@ -396,18 +424,38 @@ const startBot = async (retries = 5) => {
         console.error('Database initialization error:', dbErr);
     }
 
-    // Start health check server
+    // Start health check and Mini App server
     const PORT = process.env.PORT || 3000;
-    const server = http.createServer((req, res) => {
-        if (req.url === '/ping') {
-            res.writeHead(200, { 'Content-Type': 'text/plain' });
-            res.end('pong\n');
-            return;
+    const app = express();
+    app.use(express.json());
+
+    // Serve static files for Mini App
+    app.use(express.static(path.join(__dirname, 'web/public')));
+
+    // API endpoints for Mini App
+    app.get('/api/user-data', async (req, res) => {
+        try {
+            const telegramId = req.query.tg_id;
+            if (!telegramId) return res.status(400).json({ error: 'tg_id required' });
+
+            const user = await database.getUserByTelegramId(telegramId);
+            const stats = await database.getUserStats(telegramId);
+            const referralInfo = await database.getReferralInfo(telegramId);
+            const tariffs = await database.getTariffs();
+
+            res.json({ user, stats, referralInfo, tariffs });
+        } catch (error) {
+            console.error('API Error:', error);
+            res.status(500).json({ error: 'Internal server error' });
         }
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('Bot is running\n');
-    }).listen(PORT, '0.0.0.0', () => {
-        console.log(`📡 Health check server listening on port ${PORT}`);
+    });
+
+    // Health check and root route
+    app.get('/ping', (req, res) => res.send('pong'));
+    app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'web/public/Index.html')));
+
+    const server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`📡 Health check and Mini App server listening on port ${PORT}`);
 
         // Start self-pinging to keep the service awake on Render
         const APP_URL = 'https://ravon-ai-bot-7xh1.onrender.com';

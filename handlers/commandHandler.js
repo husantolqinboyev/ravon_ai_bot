@@ -13,7 +13,7 @@ class CommandHandler {
         this.mainMenu = Markup.keyboard([
             ['🎙 Talaffuzni tekshirish', '🔊 Matnni ovozga aylantirish'],
             ['👤 Profil', '💳 Tariflar | Ko\'proq foyda olish'],
-            ['❓ Bot qanday ishlaydi?']
+            ['❓ Bot qanday ishlaydi?', '📱 Mini App']
         ]).resize();
 
         this.adminMenu = Markup.keyboard([
@@ -93,6 +93,19 @@ class CommandHandler {
         }
 
         await ctx.replyWithMarkdown(welcomeMessage, this.mainMenu);
+    }
+
+    async handleHowItWorks(ctx) {
+        await ctx.reply('Botdan foydalanish bo\'yicha video qo\'llanma va PDF qo\'llanma yuborilmoqda...');
+    }
+
+    async handleMiniApp(ctx) {
+        const miniAppUrl = process.env.APP_URL || 'https://ravon-ai-bot-7xh1.onrender.com';
+        await ctx.reply('📱 Ravon AI Mini App-ni ochish uchun pastdagi tugmani bosing:', 
+            Markup.inlineKeyboard([
+                [Markup.button.webApp('🚀 Mini App-ni ochish', miniAppUrl)]
+            ])
+        );
     }
 
     async handleAdmin(ctx) {
