@@ -2,216 +2,29 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Ravon AI - User Panel</title>
+    <link rel="stylesheet" href="/css/style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        :root {
-            --tg-theme-bg-color: #ffffff;
-            --tg-theme-secondary-bg-color: #f0f2f5;
-            --tg-theme-text-color: #000000;
-            --tg-theme-hint-color: #999999;
-            --tg-theme-button-color: #2481cc;
-            --tg-theme-button-text-color: #ffffff;
-            --primary: #2481cc;
-            --success: #34c759;
-            --warning: #ffcc00;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--tg-theme-bg-color);
-            color: var(--tg-theme-text-color);
-            margin: 0;
-            padding: 0;
-            padding-bottom: 70px; /* Space for bottom nav */
-            user-select: none;
-            overflow-x: hidden;
-        }
-
-        .container {
-            width: 100%;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        /* Views */
-        .view {
-            display: none;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .view.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .header h1 {
-            font-size: 22px;
-            margin: 0;
-            font-weight: 700;
-        }
-
-        /* Cards */
-        .card {
-            background-color: var(--tg-theme-secondary-bg-color);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .card-title {
-            font-size: 14px;
-            color: var(--tg-theme-hint-color);
-            margin-bottom: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 12px;
-            background: rgba(255,255,255,0.5);
-            border-radius: 12px;
-        }
-
-        .stat-value {
-            font-size: 20px;
-            font-weight: 700;
-            display: block;
-            color: var(--primary);
-        }
-
-        .stat-label {
-            font-size: 11px;
-            color: var(--tg-theme-hint-color);
-        }
-
-        /* Bottom Nav */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background-color: var(--tg-theme-secondary-bg-color);
-            display: flex;
-            justify-content: space-around;
-            padding: 10px 0;
-            border-top: 1px solid rgba(0,0,0,0.1);
-            backdrop-filter: blur(10px);
-            z-index: 1000;
-        }
-
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            color: var(--tg-theme-hint-color);
-            text-decoration: none;
-            font-size: 10px;
-            transition: color 0.2s;
-            cursor: pointer;
-        }
-
-        .nav-item.active {
-            color: var(--primary);
-        }
-
-        .nav-item i {
-            font-size: 20px;
-            margin-bottom: 4px;
-        }
-
-        /* Buttons */
-        .btn-action {
-            background-color: var(--primary);
-            color: #fff;
-            border: none;
-            border-radius: 12px;
-            padding: 14px;
-            width: 100%;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        /* Tariffs */
-        .tariff-card {
-            border: 2px solid transparent;
-            transition: border-color 0.2s;
-        }
-
-        .tariff-card.premium {
-            border-color: var(--warning);
-        }
-
-        .price {
-            font-size: 24px;
-            font-weight: 800;
-            margin: 10px 0;
-        }
-
-        /* Loading */
-        #loader {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: var(--tg-theme-bg-color);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid var(--tg-theme-secondary-bg-color);
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
 </head>
 <body>
     <div id="loader"><div class="spinner"></div></div>
 
     <div class="container">
-        <!-- Home View -->
         <div id="view-home" class="view active">
             <div class="header">
                 <h1>🎙 Ravon AI</h1>
-                <p style="font-size: 14px; color: var(--tg-theme-hint-color);">Nutqingizni ravon qiling</p>
+                <p>Nutqingizni ravon qiling</p>
             </div>
 
             <div class="card">
-                <div class="card-title">Asosiy Amallar</div>
+                <div class="card-title"><i></i>Asosiy Amallar</div>
                 <button class="btn-action" onclick="sendToBot('check_pronunciation')">🎙 Talaffuzni Tekshirish</button>
-                <button class="btn-action" style="background: var(--success);" onclick="sendToBot('text_to_audio')">🔊 Matnni Audioga O'tkazish</button>
+                <button class="btn-action secondary" onclick="sendToBot('text_to_audio')">🔊 Matnni Audioga O'tkazish</button>
             </div>
 
             <div class="card">
-                <div class="card-title">Statistika</div>
+                <div class="card-title"><i></i>Statistika</div>
                 <div class="stats-grid" id="home-stats">
                     <div class="stat-item">
                         <span class="stat-value" id="total-tests">0</span>
@@ -225,21 +38,29 @@
             </div>
         </div>
 
-        <!-- Profile View -->
         <div id="view-profile" class="view">
             <div class="header"><h1>👤 Profil</h1></div>
             
             <div class="card">
-                <div class="card-title">Foydalanuvchi ma'lumotlari</div>
+                <div class="card-title"><i></i>Foydalanuvchi ma'lumotlari</div>
                 <div id="user-info">
-                    <p><b>Ism:</b> <span id="user-name">...</span></p>
-                    <p><b>ID:</b> <span id="user-id">...</span></p>
-                    <p><b>Tarif:</b> <span id="user-tariff">...</span></p>
+                    <div class="info-row">
+                        <span class="info-label">Ism:</span>
+                        <span class="info-value" id="user-name">...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">ID:</span>
+                        <span class="info-value" id="user-id">...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Tarif:</span>
+                        <span class="info-value" id="user-tariff">...</span>
+                    </div>
                 </div>
             </div>
 
             <div class="card">
-                <div class="card-title">Limitlar</div>
+                <div class="card-title"><i></i>Limitlar</div>
                 <div class="stats-grid">
                     <div class="stat-item">
                         <span class="stat-value" id="daily-limit">0/3</span>
@@ -252,19 +73,15 @@
                 </div>
             </div>
 
-            <button class="btn-action" style="background: var(--warning); color: #000;" onclick="switchView('view-tariffs')">💎 Premiumga o'tish</button>
+            <button class="btn-action premium-btn" onclick="switchView('view-tariffs')">💎 Premiumga o'tish</button>
         </div>
 
-        <!-- Tariffs View -->
         <div id="view-tariffs" class="view">
             <div class="header"><h1>💳 Tariflar</h1></div>
-            <div id="tariffs-list">
-                <!-- Tariffs will be loaded here -->
-            </div>
+            <div id="tariffs-list"></div>
         </div>
     </div>
 
-    <!-- Bottom Navigation -->
     <nav class="bottom-nav">
         <div class="nav-item active" onclick="switchView('view-home', this)">
             <i>🏠</i><span>Asosiy</span>
@@ -281,50 +98,157 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Data Storage
         let userData = null;
+        const CACHE_TTL = 12 * 60 * 1000;
+        const SOFT_REFRESH_AFTER = 90 * 1000;
+        const MIN_FETCH_INTERVAL = 120 * 1000;
+        let fetchPromise = null;
+        let lastFetchAt = 0;
 
-        // Fetch Data from API
-        async function loadData() {
+        function openDb() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('ravon-miniapp', 1);
+                request.onupgradeneeded = () => {
+                    const db = request.result;
+                    if (!db.objectStoreNames.contains('userData')) {
+                        db.createObjectStore('userData', { keyPath: 'key' });
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function getCachedData(key) {
+            try {
+                const db = await openDb();
+                return await new Promise((resolve) => {
+                    const tx = db.transaction('userData', 'readonly');
+                    const store = tx.objectStore('userData');
+                    const req = store.get(key);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                });
+            } catch {
+                return null;
+            }
+        }
+
+        async function setCachedData(key, data) {
+            try {
+                const db = await openDb();
+                await new Promise((resolve) => {
+                    const tx = db.transaction('userData', 'readwrite');
+                    const store = tx.objectStore('userData');
+                    store.put({ key, ts: Date.now(), data });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                });
+            } catch {}
+        }
+
+        async function fetchUserData(userId) {
+            if (fetchPromise) return fetchPromise;
+            fetchPromise = new Promise(async (resolve, reject) => {
+                try {
+                    if (!navigator.onLine) {
+                        reject(new Error('offline'));
+                        return;
+                    }
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 6000);
+                    const response = await fetch(`/api/user-data?tg_id=${userId}`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (!response.ok) {
+                        reject(new Error('Server xatosi'));
+                        return;
+                    }
+                    const freshData = await response.json();
+                    if (!freshData || freshData.error) {
+                        reject(new Error('Real ma\'lumotlarni olishda xatolik yuz berdi.'));
+                        return;
+                    }
+                    resolve(freshData);
+                } catch (err) {
+                    reject(err);
+                }
+            });
+            try {
+                const result = await fetchPromise;
+                return result;
+            } finally {
+                fetchPromise = null;
+            }
+        }
+
+        async function loadData(options = {}) {
             try {
                 const user = tg.initDataUnsafe.user;
-                if (!user) return;
+                if (!user) {
+                    tg.showAlert('Foydalanuvchi ma\'lumotlari topilmadi.');
+                    return;
+                }
 
-                const response = await fetch(`/api/user-data?tg_id=${user.id}`);
-                userData = await response.json();
-                
-                renderUI();
-                document.getElementById('loader').style.display = 'none';
+                const cacheKey = `user-${user.id}`;
+                const cached = await getCachedData(cacheKey);
+                if (cached?.data) {
+                    userData = cached.data;
+                    renderUI();
+                    document.getElementById('loader').style.display = 'none';
+                }
+
+                const now = Date.now();
+                const isFresh = cached?.ts && (now - cached.ts < CACHE_TTL);
+                const shouldSoftRefresh = cached?.ts && (now - cached.ts > SOFT_REFRESH_AFTER);
+                if (isFresh && !options.force && !shouldSoftRefresh) {
+                    return;
+                }
+
+                if (document.visibilityState === 'hidden') {
+                    return;
+                }
+
+                if (now - lastFetchAt < MIN_FETCH_INTERVAL) {
+                    return;
+                }
+
+                lastFetchAt = now;
+                const freshData = await fetchUserData(user.id);
+                if (freshData) {
+                    userData = freshData;
+                    renderUI();
+                    await setCachedData(cacheKey, freshData);
+                }
             } catch (error) {
-                console.error('Data load error:', error);
-                tg.showAlert('Ma\'lumotlarni yuklashda xatolik yuz berdi.');
+                if (!userData) {
+                    tg.showAlert('Ma\'lumotlarni yuklashda xatolik yuz berdi.');
+                }
+            } finally {
+                document.getElementById('loader').style.display = 'none';
             }
         }
 
         function renderUI() {
             if (!userData) return;
 
-            // Home Stats
             document.getElementById('total-tests').innerText = userData.stats?.total_assessments || 0;
             document.getElementById('avg-score').innerText = Math.round(userData.stats?.avg_overall || 0);
 
-            // Profile
             document.getElementById('user-name').innerText = userData.user.first_name || 'Foydalanuvchi';
             document.getElementById('user-id').innerText = userData.user.telegram_id;
             document.getElementById('user-tariff').innerText = userData.user.is_premium ? '💎 Premium' : '🆓 Bepul';
             document.getElementById('daily-limit').innerText = `${userData.user.used_today}/${userData.user.daily_limit}`;
             document.getElementById('word-limit').innerText = userData.user.word_limit || 30;
 
-            // Tariffs
             const tariffsContainer = document.getElementById('tariffs-list');
             tariffsContainer.innerHTML = '';
-            userData.tariffs.forEach(t => {
+            (userData.tariffs || []).forEach(t => {
                 const card = document.createElement('div');
                 card.className = `card tariff-card ${t.is_premium ? 'premium' : ''}`;
                 card.innerHTML = `
-                    <div class="card-title">${t.name}</div>
-                    <div class="price">${t.price.toLocaleString()} so'm</div>
-                    <p style="font-size: 13px; color: var(--tg-theme-hint-color);">${t.description || ''}</p>
+                    <div class="card-title"><i></i>${t.name}</div>
+                    <div class="price">${t.price.toLocaleString()} <span>so'm</span></div>
+                    <p class="tariff-desc">${t.description || ''}</p>
                     <button class="btn-action" onclick="sendToBot('select_tariff_${t.id}')">Tanlash</button>
                 `;
                 tariffsContainer.appendChild(card);
@@ -348,16 +272,16 @@
             tg.close();
         }
 
-        // Initialize
         loadData();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                loadData();
+            }
+        });
 
-        // Theme Support
-        document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
-        document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor);
-        document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor);
-        document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor);
-        document.documentElement.style.setProperty('--tg-theme-hint-color', tg.hintColor);
-        document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', tg.secondaryBackgroundColor || '#f0f2f5');
+        if (tg.colorScheme === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
     </script>
 </body>
 </html>
