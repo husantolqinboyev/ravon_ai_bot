@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
 const config = require('./config');
 const { safeAnswerCbQuery } = require('./utils/telegramUtils');
 const { escapeHTML } = require('./utils/textUtils');
@@ -292,13 +293,13 @@ bot.on('web_app_data', async (ctx) => {
         const data = JSON.parse(ctx.webAppData.data.json());
         if (data.source === 'mini_app') {
             const action = data.action;
-            
+
             // Map Mini App actions to bot handlers
             if (action === 'check_pronunciation') return commandHandler.handlePronunciationMenu(ctx);
             if (action === 'text_to_audio') return commandHandler.handleTextToAudio(ctx);
             if (action === 'profile') return commandHandler.handleProfile(ctx);
             if (action === 'tariffs') return commandHandler.handleTariffPlan(ctx);
-            
+
             // Handle tariff selection
             if (action.startsWith('select_tariff_')) {
                 const tariffId = action.replace('select_tariff_', '');
@@ -429,30 +430,35 @@ const startBot = async (retries = 5) => {
     const app = express();
     app.use(express.json());
 
-    // Serve static files for Mini App
-    app.use(express.static(path.join(__dirname, 'web/public')));
+    // Serve Vite build for Mini App
+    const distPath = path.join(__dirname, 'web', 'dist');
+    const distExists = fs.existsSync(distPath);
+    if (distExists) {
+        app.use(express.static(distPath));
+    } else {
+        console.warn('Mini App build topilmadi. web/dist mavjud emas.');
+    }
 
     // API endpoints for Mini App
-    app.get('/api/user-data', async (req, res) => {
-        try {
-            const telegramId = req.query.tg_id;
-            if (!telegramId) return res.status(400).json({ error: 'tg_id required' });
+    const webApi = require('./web-api');
+    app.use('/api', webApi);
 
-            const user = await database.getUserByTelegramId(telegramId);
-            const stats = await database.getUserStats(telegramId);
-            const referralInfo = await database.getReferralInfo(telegramId);
-            const tariffs = await database.getTariffs();
-
-            res.json({ user, stats, referralInfo, tariffs });
-        } catch (error) {
-            console.error('API Error:', error);
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    });
+    // Health check and root route
 
     // Health check and root route
     app.get('/ping', (req, res) => res.send('pong'));
-    app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'web/public/Index.html')));
+    app.get('/', (req, res) => {
+        if (!distExists) {
+            return res.status(503).send('Mini App build topilmadi.');
+        }
+        return res.sendFile(path.join(distPath, 'index.html'));
+    });
+    app.get('*', (req, res) => {
+        if (!distExists) {
+            return res.status(503).send('Mini App build topilmadi.');
+        }
+        return res.sendFile(path.join(distPath, 'index.html'));
+    });
 
     const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`📡 Health check and Mini App server listening on port ${PORT}`);

@@ -13,7 +13,7 @@ class CommandHandler {
         this.mainMenu = Markup.keyboard([
             ['🎙 Talaffuzni tekshirish', '🔊 Matnni ovozga aylantirish'],
             ['👤 Profil', '💳 Tariflar | Ko\'proq foyda olish'],
-            ['❓ Bot qanday ishlaydi?', '📱 Mini App']
+            ['❓ Bot qanday ishlaydi?']
         ]).resize();
 
         this.adminMenu = Markup.keyboard([
@@ -213,8 +213,7 @@ class CommandHandler {
         ctx.session.testWord = text;
         ctx.session.state = 'waiting_for_test_audio';
 
-        await ctx.reply(`✅ So'z qabul qilindi (${limitCheck.wordCount}/${limitCheck.limit} so'z)!\n\n🎙 Endi shu so'zni ovozli yozib yuboring:`);
-        await ctx.reply(`_"${text}"_`, { parse_mode: 'Markdown' });
+        await ctx.reply(`✅ Ajoyib, endi ovozli xabar yuboring.\n\n_"${text}"_`, { parse_mode: 'Markdown' });
     }
 
     async handleRandomMenu(ctx) {
@@ -510,7 +509,43 @@ class CommandHandler {
     async handleTextToAudio(ctx) {
         ctx.session = ctx.session || {};
         ctx.session.state = 'waiting_for_tts_text';
-        await ctx.reply('🔊 Matnni audioga o\'tkazish!\n\nIltimos, audio qilinishi kerak bo\'lgan matnni yozib yuboring:');
+        await ctx.reply('🔊 Matnni audioga o\'tkazish!\n\nIltimos, matnni yozing. Keyin ovoz jinsini tanlaysiz (Erkak / Ayol).');
+    }
+
+    async handleTtsVoiceSelect(ctx) {
+        const voice = ctx.callbackQuery.data === 'tts_voice_male' ? 'male' : 'female';
+        const text = ctx.session?.ttsText;
+
+        if (!text) {
+            await ctx.answerCbQuery('Matn topilmadi. Iltimos, qaytadan yuboring.', { show_alert: true });
+            return;
+        }
+
+        try {
+            await database.setUserVoice(ctx.from.id, voice);
+        } catch (e) {
+            console.error('Set voice error:', e);
+        }
+
+        await ctx.editMessageText('Zo\'r, matn audioga aylantirilmoqda... ⏳').catch(async () => {
+            await ctx.reply('Zo\'r, matn audioga aylantirilmoqda... ⏳');
+        });
+
+        try {
+            const audioPath = await ttsService.generateAudio(text, 'en');
+            await ctx.replyWithAudio({ source: audioPath });
+            await ttsService.cleanup(audioPath);
+            await database.incrementUsage(ctx.from.id);
+        } catch (e) {
+            console.error('TTS Error:', e);
+            await ctx.reply('Audioni yaratishda xatolik yuz berdi.');
+        } finally {
+            if (ctx.session) {
+                delete ctx.session.state;
+                delete ctx.session.ttsText;
+            }
+        }
+        await ctx.answerCbQuery().catch(() => {});
     }
 
     async handleProfile(ctx) {
@@ -522,25 +557,29 @@ class CommandHandler {
             return ctx.reply("Siz hali ro'yxatdan o'tmagansiz. Iltimos, /start buyrug'ini bosing.");
         }
 
+        const displayName = user.first_name || ctx.from.first_name || 'Foydalanuvchi';
         let profileMsg = `👤 *Sizning profilingiz:*\n\n` +
-            `🆔 ID: \`${ctx.from.id}\`\n` +
-            `📅 Ro'yxatdan o'tilgan: ${user.created_at ? user.created_at.split(' ')[0] : 'Noma\'lum'}\n\n` +
-            `📊 *Sizning limitingiz:*\n`;
+            `👤 Ism: ${escapeHTML(displayName)}\n` +
+            `🆔 ID: \`${ctx.from.id}\`\n\n` +
+            `💳 *Joriy tarif:* \n`;
 
         if (user.is_premium) {
             const until = new Date(user.premium_until).toLocaleDateString();
-            profileMsg += `💎 *Tarif:* Premium\n`;
-            profileMsg += `📅 Muddat: ${until} gacha\n`;
+            profileMsg += `💎 Premium\n`;
+            profileMsg += `📅 Muddat: ${until} gacha\n\n`;
         } else {
-            profileMsg += `🆓 *Tarif:* Bepul\n`;
+            profileMsg += `🆓 Bepul\n`;
+            profileMsg += `📅 Muddat: Cheklanmagan\n\n`;
         }
 
-        profileMsg += `✅ Kunlik foydalanish: ${user.used_today} / ${user.daily_limit}\n` +
+        profileMsg += `📊 *Natijalarim:*\n` +
+            `• Jami foydalanish: ${stats ? stats.total_assessments : 0}\n` +
+            `• O'rtacha ball: ${stats ? Math.round(stats.avg_overall) : 0}/100\n\n` +
+            `📊 *Sizning limitingiz:*\n` +
+            `✅ Kunlik foydalanish: ${user.used_today} / ${user.daily_limit}\n` +
             `📝 So'z limiti: ${user.word_limit || 30} so'z\n` +
             `🎁 Bonus: ${referralInfo.bonus_limit}\n\n` +
-            `📈 *Umumiy statistika:*\n` +
-            `• Jami testlar: ${stats ? stats.total_assessments : 0}\n` +
-            `• O'rtacha ball: ${stats ? Math.round(stats.avg_overall) : 0}/100`;
+            `💬 *Admin bilan bog'lanish:* Muammo, tarif, takliflar uchun bog'lanishingiz mumkin.`;
 
         const buttons = [
             [Markup.button.callback('📊 Natijalarim', 'back_to_stats')],
