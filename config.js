@@ -5,7 +5,7 @@ module.exports = {
     // Bot configuration
     MAX_AUDIO_DURATION: 30, // seconds
     SUPPORTED_AUDIO_TYPES: ['audio/ogg', 'audio/mpeg', 'audio/wav'],
-    
+
     // OpenRouter Settings
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'google/gemini-3-flash-preview',
@@ -20,7 +20,7 @@ module.exports = {
     // Channel Subscription Check
     REQUIRED_CHANNEL_ID: '-1003014655042',
     CHANNEL_URL: 'https://t.me/englishwithSanatbek',
-    
+
     // Admin Contact
     ADMIN_USERNAME: '@khamidovsanat',
 
@@ -28,4 +28,5 @@ module.exports = {
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
+    APP_URL: process.env.APP_URL || 'https://ravon-ai-bot-7xh1.onrender.com', // Mini App URL
 };

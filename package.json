@@ -10,6 +10,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
+    "build": "npm run web:build",
     "dev": "nodemon index.js",
     "web:dev": "npm run dev -w web",
     "web:build": "npm run build -w web",

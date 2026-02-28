@@ -11,6 +11,7 @@ const config = require('../config');
 class CommandHandler {
     constructor() {
         this.mainMenu = Markup.keyboard([
+            [Markup.button.webApp('🚀 Ravon AI Mini App', config.APP_URL)],
             ['🎙 Talaffuzni tekshirish', '🔊 Matnni ovozga aylantirish'],
             ['👤 Profil', '💳 Tariflar | Ko\'proq foyda olish'],
             ['❓ Bot qanday ishlaydi?']
@@ -92,7 +93,14 @@ class CommandHandler {
             welcomeMessage += `\n\n👨‍🏫 Siz o'qituvchisiz. O'qituvchi paneliga kirish uchun /teacher buyrug'ini yuboring.`;
         }
 
-        await ctx.replyWithMarkdown(welcomeMessage, this.mainMenu);
+        const inlineKeyboard = Markup.inlineKeyboard([
+            [Markup.button.webApp('🚀 Ravon AI Web Panel', config.APP_URL)]
+        ]);
+
+        await ctx.replyWithMarkdown(welcomeMessage, {
+            ...this.mainMenu,
+            ...inlineKeyboard
+        });
     }
 
     async handleHowItWorks(ctx) {
@@ -100,10 +108,9 @@ class CommandHandler {
     }
 
     async handleMiniApp(ctx) {
-        const miniAppUrl = process.env.APP_URL || 'https://ravon-ai-bot-7xh1.onrender.com';
-        await ctx.reply('📱 Ravon AI Mini App-ni ochish uchun pastdagi tugmani bosing:', 
+        await ctx.reply('📱 Ravon AI Mini App-ni ochish uchun pastdagi tugmani bosing:',
             Markup.inlineKeyboard([
-                [Markup.button.webApp('🚀 Mini App-ni ochish', miniAppUrl)]
+                [Markup.button.webApp('🚀 Mini App-ni ochish', config.APP_URL)]
             ])
         );
     }
@@ -177,7 +184,7 @@ class CommandHandler {
         await ctx.editMessageText('✍️ Iltimos, talaffuz qilmoqchi bo\'lgan matningizni yozing:').catch(async () => {
             await ctx.reply('✍️ Iltimos, talaffuz qilmoqchi bo\'lgan matningizni yozing:');
         });
-        await safeAnswerCbQuery(ctx).catch(() => {});
+        await safeAnswerCbQuery(ctx).catch(() => { });
     }
 
     async processTextForPronunciation(ctx) {
@@ -411,7 +418,7 @@ class CommandHandler {
                 await ctx.editMessageText(`Hozircha ${type === 'word' ? 'so\'zlar' : 'matnlar'} mavjud emas.`).catch(async () => {
                     await ctx.reply(`Hozircha ${type === 'word' ? 'so\'zlar' : 'matnlar'} mavjud emas.`);
                 });
-                await ctx.answerCbQuery().catch(() => {});
+                await ctx.answerCbQuery().catch(() => { });
                 return;
             }
             return ctx.reply(`Hozircha ${type === 'word' ? 'so\'zlar' : 'matnlar'} mavjud emas.`);
@@ -453,7 +460,7 @@ class CommandHandler {
             await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(async () => {
                 await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
             });
-            await ctx.answerCbQuery().catch(() => {});
+            await ctx.answerCbQuery().catch(() => { });
         } else {
             await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
         }
@@ -479,8 +486,8 @@ class CommandHandler {
     }
 
     async handleCancelTexts(ctx) {
-        await ctx.answerCbQuery().catch(() => {});
-        await ctx.deleteMessage().catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
+        await ctx.deleteMessage().catch(() => { });
     }
 
     async handleCompareTextAudio(ctx) {
@@ -545,7 +552,7 @@ class CommandHandler {
                 delete ctx.session.ttsText;
             }
         }
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
     }
 
     async handleProfile(ctx) {
@@ -584,7 +591,7 @@ class CommandHandler {
         const buttons = [
             [Markup.button.callback('📊 Natijalarim', 'back_to_stats')],
             [Markup.button.callback('🏆 Top foydalanuvchilar', 'top_users')],
-            [Markup.button.url('🔗 Admin bilan bog\'lanish', `https://t.me/${config.ADMIN_USERNAME.replace('@','')}`)]
+            [Markup.button.url('🔗 Admin bilan bog\'lanish', `https://t.me/${config.ADMIN_USERNAME.replace('@', '')}`)]
         ];
         await ctx.replyWithMarkdown(profileMsg, Markup.inlineKeyboard(buttons));
     }
@@ -634,7 +641,7 @@ class CommandHandler {
                 await ctx.editMessageText(emptyMsg).catch(async () => {
                     await ctx.reply(emptyMsg);
                 });
-                await ctx.answerCbQuery().catch(() => {});
+                await ctx.answerCbQuery().catch(() => { });
                 return;
             }
             return ctx.reply(emptyMsg);
@@ -678,7 +685,7 @@ class CommandHandler {
             await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(async () => {
                 await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
             });
-            await ctx.answerCbQuery().catch(() => {});
+            await ctx.answerCbQuery().catch(() => { });
         } else {
             await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
         }
@@ -704,8 +711,8 @@ class CommandHandler {
     }
 
     async handleCancelUsers(ctx) {
-        await ctx.answerCbQuery().catch(() => {});
-        await ctx.deleteMessage().catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
+        await ctx.deleteMessage().catch(() => { });
     }
 
     async handleBroadcastRequest(ctx) {
@@ -763,7 +770,7 @@ class CommandHandler {
         ctx.session = ctx.session || {};
         ctx.session.broadcast = ctx.session.broadcast || { buttons: [] };
         ctx.session.state = 'broadcast_waiting_button';
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
         await ctx.reply('Tugma qo‘shish: "Matn | Link" ko‘rinishida yuboring.\nMisol: Ravon AI | https://t.me/ravon_ai');
     }
 
@@ -789,7 +796,7 @@ class CommandHandler {
         ctx.session = ctx.session || {};
         ctx.session.broadcast = ctx.session.broadcast || { buttons: [] };
         ctx.session.state = 'broadcast_waiting_bot_button';
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
         await ctx.reply('Maxsus bot tugmasi: "Matn | @botusername | start_param" ko‘rinishida yuboring.\nMisol: Boshlash | @ravon_ai_bot | promo123');
     }
 
@@ -816,11 +823,11 @@ class CommandHandler {
         if (!isAdmin) return;
         const b = ctx.session?.broadcast;
         if (!b || !b.content) {
-            await ctx.answerCbQuery('Avval xabar yuboring.', { show_alert: true }).catch(() => {});
+            await ctx.answerCbQuery('Avval xabar yuboring.', { show_alert: true }).catch(() => { });
             return;
         }
         const keyboard = b.buttons && b.buttons.length > 0 ? Markup.inlineKeyboard(b.buttons.map(btn => [Markup.button.url(btn.text, btn.url)])) : undefined;
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
         if (b.content.type === 'text') {
             await ctx.reply(b.content.text, keyboard);
         } else if (b.content.type === 'photo') {
@@ -841,12 +848,12 @@ class CommandHandler {
         if (!isAdmin) return;
         const b = ctx.session?.broadcast;
         if (!b || !b.content) {
-            await ctx.answerCbQuery('Avval xabar yuboring.', { show_alert: true }).catch(() => {});
+            await ctx.answerCbQuery('Avval xabar yuboring.', { show_alert: true }).catch(() => { });
             return;
         }
         const users = await database.getAllUsers();
-        await ctx.answerCbQuery().catch(() => {});
-        await ctx.reply(`Yuborilmoqda: ${users.length} ta foydalanuvchi`).catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
+        await ctx.reply(`Yuborilmoqda: ${users.length} ta foydalanuvchi`).catch(() => { });
         const keyboard = b.buttons && b.buttons.length > 0 ? { reply_markup: Markup.inlineKeyboard(b.buttons.map(btn => [Markup.button.url(btn.text, btn.url)])).reply_markup } : {};
         let successCount = 0;
         let failCount = 0;
@@ -884,7 +891,7 @@ class CommandHandler {
         if (!isAdmin) return;
         ctx.session.state = null;
         ctx.session.broadcast = null;
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch(() => { });
         await ctx.reply('Bekor qilindi.', this.adminMenu);
     }
 

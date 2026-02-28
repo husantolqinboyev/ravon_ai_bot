@@ -464,10 +464,9 @@ const startBot = async (retries = 5) => {
         console.log(`📡 Health check and Mini App server listening on port ${PORT}`);
 
         // Start self-pinging to keep the service awake on Render
-        const APP_URL = 'https://ravon-ai-bot-7xh1.onrender.com';
         const pingInterval = setInterval(() => {
-            https.get(`${APP_URL}/ping`, (res) => {
-                console.log(`Self-ping sent to ${APP_URL}/ping. Status: ${res.statusCode}`);
+            https.get(`${config.APP_URL}/ping`, (res) => {
+                console.log(`Self-ping sent to ${config.APP_URL}/ping. Status: ${res.statusCode}`);
             }).on('error', (err) => {
                 console.error('Self-ping error:', err.message);
             });
@@ -503,6 +502,16 @@ const startBot = async (retries = 5) => {
             });
 
             console.log('✅ Bot is running with polling!');
+
+            // Set Mini App menu button
+            await bot.telegram.setChatMenuButton({
+                menuButton: {
+                    type: 'web_app',
+                    text: '🚀 Ravon Web',
+                    web_app: { url: config.APP_URL }
+                }
+            });
+            console.log('✅ Mini App menu button set');
             return;
         } catch (err) {
             console.error(`❌ Launch error (Attempt ${i + 1}):`, err.message);
