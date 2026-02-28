@@ -19,7 +19,7 @@ const FREE_DAILY_LIMIT = 5;
 const PREMIUM_DAILY_LIMIT = 50;
 
 const TextToSpeech = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [text, setText] = useState('');
@@ -133,7 +133,7 @@ const TextToSpeech = () => {
   const usagePercent = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
 
   return (
-    <DashboardLayout user={user} onLogout={logout}>
+    <DashboardLayout user={user}>
       <div className="max-w-4xl mx-auto space-y-6 md:space-y-8 animate-fade-in px-2 md:px-0">
         {/* Header */}
         <div className="text-center space-y-2">

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const Statistics = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -55,7 +55,7 @@ const Statistics = () => {
   const maxCount = Math.max(...last7Days.map(d => d.count), 1);
 
   return (
-    <DashboardLayout user={user} onLogout={logout}>
+    <DashboardLayout user={user}>
       <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -165,9 +165,9 @@ const Statistics = () => {
               <div className="h-48 flex items-end gap-2">
                 {last7Days.map((day, index) => (
                   <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                    <div 
+                    <div
                       className="w-full rounded-t-lg transition-all duration-300 gradient-primary"
-                      style={{ 
+                      style={{
                         height: `${Math.max(10, (day.count / maxCount) * 100)}%`,
                       }}
                     />
@@ -207,7 +207,7 @@ const Statistics = () => {
             ) : (
               <div className="space-y-2">
                 {analyses.slice(0, 10).map((analysis, index) => (
-                  <div 
+                  <div
                     key={analysis.id || index}
                     className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                   >

@@ -1,6 +1,6 @@
- import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
+import {
   Menu,
   X,
   Sparkles,
@@ -19,7 +19,6 @@ import type { UserSession } from '@/lib/db';
 
 interface DashboardNavProps {
   user: UserSession;
-  onLogout: () => void;
 }
 
 const navItems = [
@@ -32,7 +31,7 @@ const navItems = [
   { label: 'Yordam', path: '/help', icon: HelpCircle },
 ];
 
-export function DashboardNav({ user, onLogout }: DashboardNavProps) {
+export function DashboardNav({ user }: DashboardNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
@@ -50,7 +49,7 @@ export function DashboardNav({ user, onLogout }: DashboardNavProps) {
 
       {/* Overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setIsOpen(false)}
         />
@@ -79,9 +78,9 @@ export function DashboardNav({ user, onLogout }: DashboardNavProps) {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.path || 
+              const isActive = location.pathname === item.path ||
                 (item.path === '/test' && location.pathname === '/');
-              
+
               return (
                 <NavLink
                   key={item.path}
@@ -105,13 +104,13 @@ export function DashboardNav({ user, onLogout }: DashboardNavProps) {
 
           {/* User section */}
           <div className="p-4 border-t border-border">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
                 {user.photoUrl ? (
-                  <img 
-                    src={user.photoUrl} 
-                    alt={user.firstName} 
-                    className="w-10 h-10 rounded-full"
+                  <img
+                    src={user.photoUrl}
+                    alt={user.firstName}
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <User className="h-5 w-5 text-primary" />
@@ -128,14 +127,6 @@ export function DashboardNav({ user, onLogout }: DashboardNavProps) {
                 )}
               </div>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full"
-              onClick={onLogout}
-            >
-              Chiqish
-            </Button>
           </div>
         </div>
       </aside>

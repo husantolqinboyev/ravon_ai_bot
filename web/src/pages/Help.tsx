@@ -16,7 +16,7 @@ const ADMIN_USERNAME = 'khamidovsanat';
 const CHANNEL_USERNAME = 'englishwithSanatbek';
 
 const Help = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   if (!user) return null;
@@ -80,7 +80,7 @@ const Help = () => {
   ];
 
   return (
-    <DashboardLayout user={user} onLogout={logout}>
+    <DashboardLayout user={user}>
       <div className="max-w-4xl mx-auto space-y-6 md:space-y-8 animate-fade-in px-2 md:px-0">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -191,8 +191,8 @@ const Help = () => {
                 <p className="text-sm text-muted-foreground mb-3">
                   Savollar va premium uchun
                 </p>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => window.open(`https://t.me/${ADMIN_USERNAME}`, '_blank')}
                 >
@@ -200,7 +200,7 @@ const Help = () => {
                   <ExternalLink className="h-3 w-3 ml-2" />
                 </Button>
               </div>
-              
+
               <div className="p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                 <div className="flex items-center gap-3 mb-2">
                   <MessageCircle className="h-5 w-5 text-secondary" />
@@ -209,8 +209,8 @@ const Help = () => {
                 <p className="text-sm text-muted-foreground mb-3">
                   Yangiliklar va darslar
                 </p>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => window.open(`https://t.me/${CHANNEL_USERNAME}`, '_blank')}
                 >
@@ -261,8 +261,8 @@ const Help = () => {
 
         {/* Navigation */}
         <div className="flex justify-center">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => navigate('/test')}
             className="flex items-center gap-2"
           >

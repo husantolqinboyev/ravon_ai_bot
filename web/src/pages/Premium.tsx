@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 const ADMIN_USERNAME = 'khamidovsanat';
 
 const Premium = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -76,7 +76,7 @@ const Premium = () => {
   ];
 
   return (
-    <DashboardLayout user={user} onLogout={logout}>
+    <DashboardLayout user={user}>
       <div className="max-w-4xl mx-auto space-y-6 md:space-y-8 animate-fade-in px-2 md:px-0">
         {/* Header */}
         <div className="text-center space-y-2">

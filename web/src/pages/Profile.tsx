@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 
 const Profile = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,7 +67,7 @@ const Profile = () => {
   const avgScore = userStats?.avg_overall || 0;
 
   return (
-    <DashboardLayout user={user} onLogout={logout}>
+    <DashboardLayout user={user}>
       <div className="max-w-4xl mx-auto space-y-6 md:space-y-8 animate-fade-in px-2 md:px-0">
         {/* Header */}
         <div className="text-center space-y-2">

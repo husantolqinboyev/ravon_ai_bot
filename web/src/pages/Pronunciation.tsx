@@ -32,7 +32,7 @@ const Pronunciation = () => {
     created_at: string;
     duration?: number;
   }>>([]);
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -141,7 +141,7 @@ const Pronunciation = () => {
 
   if (mode === 'menu') {
     return (
-      <DashboardLayout user={user} onLogout={logout}>
+      <DashboardLayout user={user}>
         <div className="max-w-4xl mx-auto space-y-4 md:space-y-6 animate-fade-in px-2 md:px-0">
           {/* Header */}
           <div className="text-center space-y-2">
@@ -225,7 +225,7 @@ const Pronunciation = () => {
   }
 
   return (
-    <DashboardLayout user={user} onLogout={logout}>
+    <DashboardLayout user={user}>
       <div className="max-w-4xl mx-auto space-y-4 md:space-y-6 animate-fade-in px-2 md:px-0">
         {/* Header */}
         <div className="text-center space-y-2">
