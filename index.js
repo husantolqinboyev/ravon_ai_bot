@@ -455,18 +455,7 @@ const startBot = async (retries = 5) => {
 
     // Health check and root route
     app.get('/ping', (req, res) => res.send('pong'));
-    app.get('/', (req, res) => {
-        if (!distExists) {
-            return res.status(503).send('Mini App build topilmadi.');
-        }
-        return res.sendFile(path.join(distPath, 'index.html'));
-    });
-    app.get('(.*)', (req, res) => {
-        if (!distExists) {
-            return res.status(503).send('Mini App build topilmadi.');
-        }
-        return res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('/', (req, res) => res.send('Ravon AI API Server is running...'));
 
     const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`📡 Health check and Mini App server listening on port ${PORT}`);
