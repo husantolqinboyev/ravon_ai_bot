@@ -461,7 +461,7 @@ const startBot = async (retries = 5) => {
         }
         return res.sendFile(path.join(distPath, 'index.html'));
     });
-    app.get('*', (req, res) => {
+    app.get('(.*)', (req, res) => {
         if (!distExists) {
             return res.status(503).send('Mini App build topilmadi.');
         }
