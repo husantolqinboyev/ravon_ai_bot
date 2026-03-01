@@ -479,12 +479,24 @@ const startBot = async (retries = 5) => {
 
         // Start self-pinging to keep the service awake on Render
         const pingInterval = setInterval(() => {
-            https.get(`${config.APP_URL}/ping`, (res) => {
-                console.log(`Self-ping sent to ${config.APP_URL}/ping. Status: ${res.statusCode}`);
+            // Use both HTTP and HTTPS for reliability
+            const pingUrl = config.APP_URL.startsWith('https') ? config.APP_URL : `https://${config.APP_URL}`;
+            
+            https.get(`${pingUrl}/ping`, (res) => {
+                console.log(`Self-ping sent to ${pingUrl}/ping. Status: ${res.statusCode}`);
             }).on('error', (err) => {
                 console.error('Self-ping error:', err.message);
+                // Try HTTP if HTTPS fails
+                if (pingUrl.startsWith('https')) {
+                    const httpUrl = pingUrl.replace('https://', 'http://');
+                    http.get(`${httpUrl}/ping`, (res) => {
+                        console.log(`Fallback HTTP ping to ${httpUrl}/ping. Status: ${res.statusCode}`);
+                    }).on('error', (httpErr) => {
+                        console.error('Fallback HTTP ping error:', httpErr.message);
+                    });
+                }
             });
-        }, 12 * 60 * 1000); // Ping every 12 minutes
+        }, 10 * 60 * 1000); // Ping every 10 minutes instead of 12
 
         // Store interval to clear it later
         process.on('shutdown', () => clearInterval(pingInterval));
