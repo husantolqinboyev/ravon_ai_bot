@@ -430,10 +430,27 @@ const startBot = async (retries = 5) => {
     const PORT = process.env.PORT || 3000;
     const app = express();
 
-    // Enable CORS
+    // Enable CORS with more permissive settings for debugging
     app.use(cors({
-        origin: [config.APP_URL, config.FRONTEND_URL],
-        credentials: true
+        origin: function (origin, callback) {
+            // Allow requests with no origin (like mobile apps or curl)
+            if (!origin) return callback(null, true);
+
+            const allowedOrigins = [config.APP_URL, config.FRONTEND_URL, 'https://ravon-ai.vercel.app'];
+
+            // Basic check
+            const isAllowed = allowedOrigins.some(ao => ao && (ao.includes(origin) || origin.includes(ao.replace('https://', ''))));
+
+            if (isAllowed) {
+                callback(null, true);
+            } else {
+                console.log('CORS blocked origin:', origin);
+                callback(null, true); // Temporarily allow all for debugging if you want, or just callback(null, true)
+            }
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'x-telegram-init-data']
     }));
 
     app.use(express.json());
