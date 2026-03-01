@@ -97,9 +97,10 @@ class CommandHandler {
             [Markup.button.webApp('🚀 Ravon AI Web Panel', config.APP_URL)]
         ]);
 
-        await ctx.replyWithMarkdown(welcomeMessage, {
+        await ctx.reply(welcomeMessage, {
+            parse_mode: 'Markdown',
             ...this.mainMenu,
-            ...inlineKeyboard
+            ...inlineKeyboard.reply_markup
         });
     }
 
