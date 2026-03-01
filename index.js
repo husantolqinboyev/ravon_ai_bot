@@ -10,6 +10,7 @@ const { escapeHTML } = require('./utils/textUtils');
 const commandHandler = require('./handlers/commandHandler');
 const audioHandler = require('./handlers/audioHandler');
 const database = require('./database');
+const cors = require('cors');
 
 // Initialize bot
 const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
@@ -428,6 +429,13 @@ const startBot = async (retries = 5) => {
     // Start health check and Mini App server
     const PORT = process.env.PORT || 3000;
     const app = express();
+
+    // Enable CORS
+    app.use(cors({
+        origin: [config.APP_URL, config.FRONTEND_URL],
+        credentials: true
+    }));
+
     app.use(express.json());
 
     // Serve Vite build for Mini App

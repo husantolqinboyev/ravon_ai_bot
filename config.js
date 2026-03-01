@@ -29,4 +29,5 @@ module.exports = {
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
     APP_URL: process.env.APP_URL || 'https://ravon-ai-bot-7xh1.onrender.com', // Mini App URL
+    FRONTEND_URL: process.env.FRONTEND_URL || 'https://ravon-ai.vercel.app',
 };
