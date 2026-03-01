@@ -191,8 +191,36 @@ router.get('/materials', verifyTelegramWebAppData, async (req, res) => {
         // Get student tasks (assigned materials)
         const tasks = await database.getStudentTasks(user.id, 'pending');
 
+        // If no public materials, get fallback from assessment_words
+        let fallbackMaterials = [];
+        if (!publicMaterials || publicMaterials.length === 0) {
+            try {
+                const words = await database.getRecentTestWordsByType('word', 30);
+                const texts = await database.getRecentTestWordsByType('text', 20);
+                
+                fallbackMaterials = [
+                    ...words.map(w => ({
+                        id: `word-${w.id}`,
+                        type: 'word',
+                        content: w.word || w.content,
+                        translation: w.translation || null,
+                        is_public: true
+                    })),
+                    ...texts.map(t => ({
+                        id: `text-${t.id}`,
+                        type: 'text',
+                        content: t.word || t.content,
+                        translation: t.translation || null,
+                        is_public: true
+                    }))
+                ];
+            } catch (fallbackError) {
+                console.error('Error getting fallback materials:', fallbackError);
+            }
+        }
+
         res.json({
-            public: publicMaterials || [],
+            public: publicMaterials && publicMaterials.length > 0 ? publicMaterials : fallbackMaterials,
             assigned: tasks || []
         });
     } catch (error) {
