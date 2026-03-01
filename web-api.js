@@ -62,10 +62,35 @@ router.get('/user-data', verifyTelegramWebAppData, async (req, res) => {
             user = await database.getUserByTelegramId(telegramId);
         }
 
-        const stats = await database.getUserStats(telegramId);
-        const referralInfo = await database.getReferralInfo(telegramId);
-        const tariffs = await database.getTariffs();
-        const isAdmin = await database.isAdmin(telegramId);
+        // Validate user data before proceeding
+        if (!user || !user.id) {
+            console.error('Invalid user data:', user);
+            return res.status(500).json({ error: 'Invalid user data' });
+        }
+
+        const [stats, referralInfo, tariffs, isAdmin] = await Promise.all([
+            database.getUserStats(telegramId).catch(err => {
+                console.error('Error getting user stats:', err);
+                return {
+                    total_assessments: 0,
+                    avg_overall: 0,
+                    avg_accuracy: 0,
+                    avg_fluency: 0
+                };
+            }),
+            database.getReferralInfo(telegramId).catch(err => {
+                console.error('Error getting referral info:', err);
+                return { referral_count: 0, daily_limit: 3, bonus_limit: 0 };
+            }),
+            database.getTariffs().catch(err => {
+                console.error('Error getting tariffs:', err);
+                return [];
+            }),
+            database.isAdmin(telegramId).catch(err => {
+                console.error('Error checking admin status:', err);
+                return false;
+            })
+        ]);
 
         res.json({ user, stats, referralInfo, tariffs, isAdmin });
     } catch (error) {

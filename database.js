@@ -943,6 +943,17 @@ class Database {
                 };
             }
 
+            // Ensure user.id is a valid UUID
+            if (!user.id || typeof user.id !== 'string') {
+                console.error('Invalid user ID:', user.id);
+                return {
+                    total_assessments: 0,
+                    avg_overall: 0,
+                    avg_accuracy: 0,
+                    avg_fluency: 0
+                };
+            }
+
             const { data, error } = await this.supabase
                 .from('assessments')
                 .select('overall_score, accuracy_score, fluency_score')
