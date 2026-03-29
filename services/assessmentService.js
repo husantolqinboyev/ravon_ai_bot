@@ -29,22 +29,28 @@ class AssessmentService {
                         `assessment_${type}`
                     );
                 } catch (logError) {
-                    console.error('Failed to log API usage:', logError);
+                    console.error('Failed to log API usage:', logError.message);
                 }
             }
 
             // Step 2: Save assessment to database
-            const userId = await database.saveUser(user);
-            await database.saveAssessment(userId, {
-                audioDuration,
-                type,
-                target_text: targetText,
-                ...assessment,
-                feedback: JSON.stringify(assessment.detailedFeedback)
-            });
-
-            // Increment usage
-            await database.incrementUsage(user.id);
+            // Soft-fail: Supabase 502/503 bo'lsa ham AI natijasi foydalanuvchiga qaytariladi
+            try {
+                const userId = await database.saveUser(user);
+                await database.saveAssessment(userId, {
+                    audioDuration,
+                    type,
+                    target_text: targetText,
+                    ...assessment,
+                    feedback: JSON.stringify(assessment.detailedFeedback)
+                });
+                // Faqat muvaffaqiyatli saqlanganda limitni oshiramiz
+                await database.incrementUsage(user.id);
+            } catch (dbError) {
+                const cleanMsg = this._cleanErrorMessage(dbError);
+                console.error('DB save error (soft-fail):', cleanMsg);
+                // Davom etamiz — foydalanuvchi AI natijasini baribir ko'rsin
+            }
 
             // Add targetText to assessment for formatting
             assessment.targetText = targetText;
@@ -61,12 +67,30 @@ class AssessmentService {
             };
 
         } catch (error) {
-            console.error('Assessment processing error:', error);
+            if (error.message === 'LIMIT_EXCEEDED') {
+                return { success: false, error: 'LIMIT_EXCEEDED' };
+            }
+            const cleanMsg = this._cleanErrorMessage(error);
+            console.error('Assessment processing error:', cleanMsg);
             return {
                 success: false,
-                error: error.message
+                error: cleanMsg
             };
         }
+    }
+
+    /**
+     * Supabase 502/503 HTML sahifasini log uchun tozalaydi
+     */
+    _cleanErrorMessage(error) {
+        const msg = error?.message || String(error);
+        if (msg.includes('<!DOCTYPE') || msg.includes('<html') || msg.includes('Bad gateway') || msg.includes('502')) {
+            return 'Supabase DB vaqtincha ishlamayapti (502/503). Keyinroq urinib ko\'ring.';
+        }
+        if (error?.code === 'ECONNRESET' || error?.code === 'ETIMEDOUT' || error?.code === 'ENOTFOUND') {
+            return `Tarmoq xatosi: ${error.code}`;
+        }
+        return msg;
     }
 
     formatAssessmentResponse(assessment, type = 'general') {
