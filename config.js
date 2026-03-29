@@ -17,7 +17,13 @@ module.exports = {
     // Admin Settings
     ADMIN_IDS: process.env.ADMIN_ID ? process.env.ADMIN_ID.split(',').map(id => id.trim()) : [],
 
-    // Channel Subscription Check
+    // Channel Subscription Check (multiple required channels)
+    REQUIRED_CHANNELS: [
+        { id: '-1003014655042', url: 'https://t.me/englishwithSanatbek', name: 'English with Sanatbek' },
+        { id: '-1003829541296', url: 'https://t.me/MisterPodcastt', name: 'Mister Podcast' },
+        { id: '-1002804946911', url: 'https://t.me/englishpremiumteacher', name: 'English Premium Teacher' },
+    ],
+    // Legacy (birinchi kanal — backward compatibility)
     REQUIRED_CHANNEL_ID: '-1003014655042',
     CHANNEL_URL: 'https://t.me/englishwithSanatbek',
 

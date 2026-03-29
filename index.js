@@ -64,6 +64,22 @@ bot.use(async (ctx, next) => {
     return next();
 });
 
+// Helper: barcha majburiy kanallarni tekshirish
+async function checkAllChannels(telegram, userId) {
+    const results = [];
+    for (const channel of config.REQUIRED_CHANNELS) {
+        try {
+            const member = await telegram.getChatMember(channel.id, userId);
+            const isMember = ['member', 'administrator', 'creator'].includes(member.status);
+            if (!isMember) results.push(channel);
+        } catch (err) {
+            console.error(`Kanal tekshirishda xato (${channel.id}):`, err.message);
+            // Bot kanalda admin bo'lmasa, o'tkazib yuboramiz
+        }
+    }
+    return results; // a'zo bo'lmagan kanallar ro'yxati
+}
+
 // Channel Membership Middleware
 bot.use(async (ctx, next) => {
     // Skip check for certain update types or commands
@@ -87,24 +103,24 @@ bot.use(async (ctx, next) => {
     await database.checkPremiumStatus(userId);
 
     try {
-        const member = await ctx.telegram.getChatMember(config.REQUIRED_CHANNEL_ID, userId);
-        const isMember = ['member', 'administrator', 'creator'].includes(member.status);
+        const notMemberOf = await checkAllChannels(ctx.telegram, userId);
 
-        if (!isMember) {
+        if (notMemberOf.length > 0) {
+            const channelButtons = notMemberOf.map(ch => [
+                Markup.button.url(`📢 ${ch.name}`, ch.url)
+            ]);
+            channelButtons.push([
+                Markup.button.callback("✅ A'zo bo'ldim / Tekshirish", "check_subscription")
+            ]);
+
             return ctx.reply(
-                "⚠️ Botdan foydalanish uchun rasmiy kanalimizga a'zo bo'lishingiz kerak!",
-                Markup.inlineKeyboard([
-                    [Markup.button.url("Kanalga a'zo bo'lish", config.CHANNEL_URL)],
-                    [Markup.button.callback("✅ A'zo bo'ldim / Tekshirish", "check_subscription")]
-                ])
+                `⚠️ Botdan foydalanish uchun quyidagi kanallarga a'zo bo'lishingiz shart!\n\n` +
+                notMemberOf.map((ch, i) => `${i + 1}. ${ch.name}`).join('\n'),
+                Markup.inlineKeyboard(channelButtons)
             );
         }
     } catch (error) {
         console.error('Membership check error:', error);
-        // If error (e.g. bot not admin in channel), allow access but log it
-        if (error.description && error.description.includes('chat not found')) {
-            console.error('CRITICAL: Bot is not admin in the channel or Channel ID is wrong!');
-        }
     }
 
     return next();
@@ -114,19 +130,22 @@ bot.use(async (ctx, next) => {
 bot.action('check_subscription', async (ctx) => {
     const userId = ctx.from.id;
     try {
-        const member = await ctx.telegram.getChatMember(config.REQUIRED_CHANNEL_ID, userId);
-        const isMember = ['member', 'administrator', 'creator'].includes(member.status);
+        const notMemberOf = await checkAllChannels(ctx.telegram, userId);
 
-        if (isMember) {
+        if (notMemberOf.length === 0) {
             await safeAnswerCbQuery(ctx, "✅ Rahmat! Endi botdan foydalanishingiz mumkin.");
             await ctx.deleteMessage().catch(() => { });
             return commandHandler.handleStart(ctx);
         } else {
-            await safeAnswerCbQuery(ctx, "❌ Siz hali kanalga a'zo emassiz!", { show_alert: true });
+            const names = notMemberOf.map(ch => ch.name).join(', ');
+            await safeAnswerCbQuery(ctx,
+                `❌ Siz hali quyidagi kanallarga a'zo emassiz: ${names}`,
+                { show_alert: true }
+            );
         }
     } catch (error) {
         console.error('Check action error:', error);
-        await safeAnswerCbQuery(ctx, "Xatolik yuz berdi. Iltimos, kanalga a'zo ekanligingizni tekshiring.");
+        await safeAnswerCbQuery(ctx, "Xatolik yuz berdi. Iltimos, kanallarga a'zo ekanligingizni tekshiring.");
     }
 });
 
