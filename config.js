@@ -20,8 +20,6 @@ module.exports = {
     // Channel Subscription Check (multiple required channels)
     REQUIRED_CHANNELS: [
         { id: '-1003014655042', url: 'https://t.me/englishwithSanatbek', name: 'English with Sanatbek' },
-        { id: '-1003829541296', url: 'https://t.me/MisterPodcastt', name: 'Mister Podcast' },
-        { id: '-1002804946911', url: 'https://t.me/englishpremiumteacher', name: 'English Premium Teacher' },
     ],
     // Legacy (birinchi kanal — backward compatibility)
     REQUIRED_CHANNEL_ID: '-1003014655042',

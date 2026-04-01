@@ -64,16 +64,25 @@ bot.use(async (ctx, next) => {
     return next();
 });
 
-// Helper: barcha majburiy kanallarni tekshirish
+// Helper: barcha majburiy kanallarni tekshirish (DB dan)
 async function checkAllChannels(telegram, userId) {
     const results = [];
-    for (const channel of config.REQUIRED_CHANNELS) {
+    let channels = [];
+    try {
+        channels = await database.getRequiredChannels();
+    } catch (e) {
+        channels = config.REQUIRED_CHANNELS.map(ch => ({ channel_id: ch.id, channel_url: ch.url, channel_name: ch.name }));
+    }
+    for (const channel of channels) {
+        const id = channel.channel_id || channel.id;
+        const name = channel.channel_name || channel.name;
+        const url = channel.channel_url || channel.url;
         try {
-            const member = await telegram.getChatMember(channel.id, userId);
+            const member = await telegram.getChatMember(id, userId);
             const isMember = ['member', 'administrator', 'creator'].includes(member.status);
-            if (!isMember) results.push(channel);
+            if (!isMember) results.push({ id, name, url });
         } catch (err) {
-            console.error(`Kanal tekshirishda xato (${channel.id}):`, err.message);
+            console.error(`Kanal tekshirishda xato (${id}):`, err.message);
             // Bot kanalda admin bo'lmasa, o'tkazib yuboramiz
         }
     }
@@ -185,6 +194,7 @@ bot.hears('📩 To\'lov so\'rovlari', (ctx) => commandHandler.handlePaymentReque
 bot.hears('📢 E\'lon berish', (ctx) => commandHandler.handleBroadcastRequest(ctx));
 bot.hears('📊 API Monitoring', (ctx) => commandHandler.handleApiMonitoring(ctx));
 bot.hears('💳 Qolda tarif berish', (ctx) => commandHandler.handleManualTariffRequest(ctx));
+bot.hears('📡 Kanallar', (ctx) => commandHandler.handleChannels(ctx));
 
 // Admin commands with arguments
 bot.command('setcard', (ctx) => commandHandler.handleSetCard(ctx));
@@ -210,6 +220,11 @@ bot.action(/add_limit_(\d+)_(\d+)/, (ctx) => commandHandler.handleAddLimit(ctx))
 bot.action('admin_users_list', (ctx) => commandHandler.handleUsers(ctx));
 bot.action('show_referral_info', (ctx) => commandHandler.handleReferral(ctx));
 bot.action(/mat_(\d+)_(.+)/, (ctx) => commandHandler.handleManualTariffApply(ctx));
+
+// Channel management actions
+bot.action('admin_channels', (ctx) => commandHandler.handleChannels(ctx));
+bot.action('admin_add_channel', (ctx) => commandHandler.handleAddChannel(ctx));
+bot.action(/remove_channel_(.+)/, (ctx) => commandHandler.handleRemoveChannel(ctx));
 
 // AI Generation actions
 bot.action(/ai_generate_(easy|medium|hard)_(word|sentence|text)/, (ctx) => commandHandler.handleAiGenerate(ctx));
@@ -290,6 +305,10 @@ bot.on('text', async (ctx, next) => {
 
     if (ctx.session?.state === 'waiting_for_manual_tariff_user_id') {
         return commandHandler.handleManualTariffLookup(ctx);
+    }
+
+    if (ctx.session?.state === 'waiting_for_channel_id') {
+        return commandHandler.handleAddChannelProcess(ctx);
     }
 
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
@@ -443,6 +462,13 @@ const startBot = async (retries = 5) => {
         await database.initializeTables();
     } catch (dbErr) {
         console.error('Database initialization error:', dbErr);
+    }
+
+    // Seed default required channels
+    try {
+        await database.seedDefaultChannels();
+    } catch (seedErr) {
+        console.error('Channel seeding error:', seedErr);
     }
 
     // Start health check and Mini App server

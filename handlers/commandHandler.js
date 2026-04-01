@@ -25,7 +25,7 @@ class CommandHandler {
             ['💳 Karta sozlamalari', '💰 Tariflar'],
             ['📩 To\'lov so\'rovlari', '💳 Qolda tarif berish'],
             ['📢 E\'lon berish', '📊 API Monitoring'],
-            ['🔙 Asosiy menyu']
+            ['📡 Kanallar', '🔙 Asosiy menyu']
         ]).resize();
 
         this.teacherMenu = Markup.keyboard([
@@ -2390,6 +2390,224 @@ class CommandHandler {
         } catch (error) {
             console.error('Play Correct Error:', error);
             await ctx.reply("Audioni yaratishda xatolik yuz berdi.");
+        }
+    }
+
+    // ====================== KANAL BOSHQARUVI ======================
+
+    async handleChannels(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        try {
+            const channels = await database.getRequiredChannels();
+
+            let msg = `📡 *Majburiy Obuna Kanallar*\n\n`;
+
+            if (channels.length === 0) {
+                msg += `❌ Hozircha hech qanday kanal qo'shilmagan.\n`;
+            } else {
+                channels.forEach((ch, i) => {
+                    const name = ch.channel_name || ch.name || 'Nomsiz';
+                    const id = ch.channel_id || ch.id || '?';
+                    const url = ch.channel_url || ch.url || '';
+                    msg += `${i + 1}. *${name}*\n`;
+                    msg += `   🆔 ID: \`${id}\`\n`;
+                    msg += `   🔗 ${url}\n\n`;
+                });
+            }
+
+            msg += `\n📌 Kanal qo'shish uchun "+" tugmasini bosing.`;
+
+            const buttons = [];
+
+            // O'chirish tugmalari
+            channels.forEach((ch) => {
+                const name = ch.channel_name || ch.name || 'Nomsiz';
+                const id = ch.channel_id || ch.id;
+                buttons.push([
+                    Markup.button.callback(`🗑 ${name} ni o'chirish`, `remove_channel_${id}`)
+                ]);
+            });
+
+            buttons.push([Markup.button.callback('➕ Yangi kanal qo\'shish', 'admin_add_channel')]);
+            buttons.push([Markup.button.callback('🔙 Admin panel', 'admin_panel_main')]);
+
+            const keyboard = Markup.inlineKeyboard(buttons);
+
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(async () => {
+                    await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
+                });
+                await ctx.answerCbQuery().catch(() => {});
+            } else {
+                await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
+            }
+        } catch (error) {
+            console.error('handleChannels error:', error);
+            const errMsg = 'Kanallar ro\'yxatini olishda xatolik yuz berdi.';
+            if (ctx.callbackQuery) {
+                await ctx.answerCbQuery(errMsg, { show_alert: true }).catch(() => {});
+            } else {
+                await ctx.reply(errMsg);
+            }
+        }
+    }
+
+    async handleAddChannel(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        ctx.session = ctx.session || {};
+        ctx.session.state = 'waiting_for_channel_id';
+
+        const msg = `➕ *Yangi kanal qo'shish*\n\n` +
+            `📋 *Ko'rsatmalar:*\n` +
+            `1️⃣ Avval botni kanalga admin sifatida qo'shing\n` +
+            `2️⃣ Keyin kanal ma'lumotlarini quyidagi formatda yuboring:\n\n` +
+            `\`kanal_id | kanal_nomi | kanal_url\`\n\n` +
+            `📌 *Misol:*\n` +
+            `\`-1001234567890 | English Channel | https://t.me/english_channel\`\n\n` +
+            `⚠️ Bot kanalda *admin* bo'lishi shart!\n\n` +
+            `❌ Bekor qilish uchun /admin yozing.`;
+
+        if (ctx.callbackQuery) {
+            await ctx.answerCbQuery().catch(() => {});
+            await ctx.reply(msg, { parse_mode: 'Markdown' });
+        } else {
+            await ctx.reply(msg, { parse_mode: 'Markdown' });
+        }
+    }
+
+    async handleAddChannelProcess(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        const text = ctx.message.text.trim();
+
+        // Bekor qilish
+        if (text === '/admin' || text === '/start') {
+            ctx.session.state = null;
+            return this.handleAdmin(ctx);
+        }
+
+        // Format: channel_id | channel_name | channel_url
+        const parts = text.split('|').map(s => s.trim());
+        if (parts.length < 3) {
+            return ctx.reply(
+                `❌ *Format noto'g'ri!*\n\n` +
+                `To'g'ri format:\n` +
+                `\`kanal_id | kanal_nomi | kanal_url\`\n\n` +
+                `Misol:\n` +
+                `\`-1001234567890 | English Channel | https://t.me/english_channel\``,
+                { parse_mode: 'Markdown' }
+            );
+        }
+
+        const [channelId, channelName, channelUrl] = parts;
+
+        // Channel ID tekshiruvi
+        if (isNaN(channelId)) {
+            return ctx.reply(
+                `❌ Kanal ID noto'g'ri. ID faqat raqamlardan iborat bo'lishi kerak.\n` +
+                `Misol: \`-1001234567890\``,
+                { parse_mode: 'Markdown' }
+            );
+        }
+
+        await ctx.reply('⏳ Kanal tekshirilmoqda...');
+
+        try {
+            // Bot kanalda admin ekanligini tekshirish
+            let botMember;
+            try {
+                const botInfo = await ctx.telegram.getMe();
+                botMember = await ctx.telegram.getChatMember(channelId, botInfo.id);
+            } catch (e) {
+                ctx.session.state = null;
+                return ctx.reply(
+                    `❌ *Kanal topilmadi yoki botga ruxsat yo'q!*\n\n` +
+                    `Iltimos:\n` +
+                    `1️⃣ Bot kanalga admin sifatida qo'shilganini tekshiring\n` +
+                    `2️⃣ Kanal ID to'g'riligini tekshiring: \`${channelId}\``,
+                    { parse_mode: 'Markdown' }
+                );
+            }
+
+            const isAdmin = ['administrator', 'creator'].includes(botMember?.status);
+
+            if (!isAdmin) {
+                ctx.session.state = null;
+                return ctx.reply(
+                    `⚠️ *Bot kanalda admin emas!*\n\n` +
+                    `Kanal: *${channelName}*\n` +
+                    `Bot holati: \`${botMember?.status || 'nomaʼlum'}\`\n\n` +
+                    `📌 *Iltimos:*\n` +
+                    `1️⃣ Kanalingizga o'ting\n` +
+                    `2️⃣ Kanal sozlamalarida botni *Admin* qiling\n` +
+                    `3️⃣ Keyin qaytadan urinib ko'ring`,
+                    { parse_mode: 'Markdown' }
+                );
+            }
+
+            // Kanal ma'lumotlarini olish
+            let chatInfo;
+            try {
+                chatInfo = await ctx.telegram.getChat(channelId);
+            } catch (e) {
+                chatInfo = null;
+            }
+
+            const finalName = channelName || chatInfo?.title || 'Kanal';
+            const finalUrl = channelUrl || (chatInfo?.username ? `https://t.me/${chatInfo.username}` : '');
+
+            // DB ga saqlash
+            await database.addRequiredChannel(channelId, finalUrl, finalName);
+
+            ctx.session.state = null;
+
+            await ctx.reply(
+                `✅ *Kanal muvaffaqiyatli qo'shildi!*\n\n` +
+                `📢 Kanal: *${finalName}*\n` +
+                `🆔 ID: \`${channelId}\`\n` +
+                `🔗 URL: ${finalUrl}\n\n` +
+                `Endi foydalanuvchilar botdan foydalanish uchun ushbu kanalga a'zo bo'lishlari kerak.`,
+                { parse_mode: 'Markdown' }
+            );
+
+            // Kanallar ro'yxatini ko'rsatish
+            return this.handleChannels(ctx);
+
+        } catch (error) {
+            console.error('handleAddChannelProcess error:', error);
+            ctx.session.state = null;
+            await ctx.reply(
+                `❌ Kanal qo'shishda xatolik yuz berdi: ${error.message}\n\nQaytadan urinib ko'ring.`
+            );
+        }
+    }
+
+    async handleRemoveChannel(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        try {
+            const channelId = ctx.match[1];
+
+            // Kanal ma'lumotlarini olish (o'chirishdan oldin)
+            const channels = await database.getRequiredChannels();
+            const channel = channels.find(ch => String(ch.channel_id || ch.id) === String(channelId));
+            const channelName = channel ? (channel.channel_name || channel.name || 'Kanal') : channelId;
+
+            await database.removeRequiredChannel(channelId);
+            await ctx.answerCbQuery(`✅ "${channelName}" kanali o'chirildi!`).catch(() => {});
+
+            // Yangilangan ro'yxatni ko'rsatish
+            return this.handleChannels(ctx);
+
+        } catch (error) {
+            console.error('handleRemoveChannel error:', error);
+            await ctx.answerCbQuery('❌ Kanal o\'chirishda xatolik yuz berdi.', { show_alert: true }).catch(() => {});
         }
     }
 }

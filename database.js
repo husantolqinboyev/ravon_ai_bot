@@ -1479,6 +1479,121 @@ class Database {
             return { total_requests: 0, total_prompt_tokens: 0, total_candidates_tokens: 0, total_tokens: 0 };
         }
     }
+
+    // --- Required Channels Management ---
+
+    async getRequiredChannels() {
+        try {
+            const { data, error } = await this.supabase
+                .from('required_channels')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: true });
+
+            if (error) {
+                // Jadval mavjud bo'lmasa, config.js dan qaytaramiz
+                if (error.code === '42P01') {
+                    console.warn('required_channels jadval topilmadi, config.js dan foydalanilmoqda');
+                    return config.REQUIRED_CHANNELS.map(ch => ({
+                        channel_id: ch.id,
+                        channel_url: ch.url,
+                        channel_name: ch.name
+                    }));
+                }
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                // DB bo'sh bo'lsa, config.js dan qaytaramiz
+                return config.REQUIRED_CHANNELS.map(ch => ({
+                    channel_id: ch.id,
+                    channel_url: ch.url,
+                    channel_name: ch.name
+                }));
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Error getting required channels:', error);
+            // Xato bo'lsa config.js dan fallback
+            return config.REQUIRED_CHANNELS.map(ch => ({
+                channel_id: ch.id,
+                channel_url: ch.url,
+                channel_name: ch.name
+            }));
+        }
+    }
+
+    async addRequiredChannel(channelId, channelUrl, channelName) {
+        try {
+            const { data, error } = await this.supabase
+                .from('required_channels')
+                .upsert({
+                    channel_id: String(channelId),
+                    channel_url: channelUrl,
+                    channel_name: channelName,
+                    is_active: true
+                }, { onConflict: 'channel_id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding required channel:', error);
+            throw error;
+        }
+    }
+
+    async removeRequiredChannel(channelId) {
+        try {
+            const { error } = await this.supabase
+                .from('required_channels')
+                .delete()
+                .eq('channel_id', String(channelId));
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error removing required channel:', error);
+            throw error;
+        }
+    }
+
+    async seedDefaultChannels() {
+        try {
+            // Jadval mavjudligini tekshirish
+            const { count, error: countError } = await this.supabase
+                .from('required_channels')
+                .select('*', { count: 'exact', head: true });
+
+            if (countError) {
+                if (countError.code === '42P01') {
+                    console.warn('required_channels jadvali hali yaratilmagan. SQL migatsiyani bajaring.');
+                }
+                return;
+            }
+
+            if (count === 0 && config.REQUIRED_CHANNELS && config.REQUIRED_CHANNELS.length > 0) {
+                console.log('Seeding default required channels from config.js...');
+                const channels = config.REQUIRED_CHANNELS.map(ch => ({
+                    channel_id: String(ch.id),
+                    channel_url: ch.url,
+                    channel_name: ch.name,
+                    is_active: true
+                }));
+
+                const { error } = await this.supabase
+                    .from('required_channels')
+                    .insert(channels);
+
+                if (error) console.error('Error seeding channels:', error);
+                else console.log(`✅ ${channels.length} ta kanal seed qilindi`);
+            }
+        } catch (error) {
+            console.error('Error in seedDefaultChannels:', error);
+        }
+    }
 }
 
 module.exports = new Database();
