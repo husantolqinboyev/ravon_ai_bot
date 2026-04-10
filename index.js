@@ -65,6 +65,7 @@ bot.use(async (ctx, next) => {
 });
 
 // Helper: barcha majburiy kanallarni tekshirish (DB dan)
+const invalidRequiredChannels = new Set();
 async function checkAllChannels(telegram, userId) {
     const results = [];
     let channels = [];
@@ -75,6 +76,7 @@ async function checkAllChannels(telegram, userId) {
     }
     for (const channel of channels) {
         const id = channel.channel_id || channel.id;
+        if (invalidRequiredChannels.has(id)) continue;
         const name = channel.channel_name || channel.name;
         const url = channel.channel_url || channel.url;
         try {
@@ -82,8 +84,24 @@ async function checkAllChannels(telegram, userId) {
             const isMember = ['member', 'administrator', 'creator'].includes(member.status);
             if (!isMember) results.push({ id, name, url });
         } catch (err) {
-            console.error(`Kanal tekshirishda xato (${id}):`, err.message);
-            // Bot kanalda admin bo'lmasa, o'tkazib yuboramiz
+            const description = err?.response?.description || err?.message || '';
+            const isChatNotFound = err?.response?.error_code === 400 && description.includes('chat not found');
+            const isUserNotFound = err?.response?.error_code === 400 && description.includes('user not found');
+
+            // Invalid/missing channel id: skip it to avoid noisy repeated errors.
+            if (isChatNotFound) {
+                invalidRequiredChannels.add(id);
+                console.warn(`Majburiy kanal topilmadi (${id}). Bu kanal keyingi tekshiruvlarda o'tkazib yuboriladi.`);
+                continue;
+            }
+
+            // User has never joined this channel yet.
+            if (isUserNotFound) {
+                results.push({ id, name, url });
+                continue;
+            }
+
+            console.error(`Kanal tekshirishda xato (${id}):`, description);
         }
     }
     return results; // a'zo bo'lmagan kanallar ro'yxati

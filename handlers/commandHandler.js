@@ -254,7 +254,7 @@ class CommandHandler {
 
             const msg = `🎲 *Tasodifiy ${typeText}!*\n\n👉 *${word.word}*\n\nTayyor bo'lsangiz, "O'qish" tugmasini bosing:`;
 
-            await ctx.editMessageText(msg, {
+            await safeEditMessage(ctx, msg, {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
                     [Markup.button.callback('🎙 O\'qish', 'confirm_test_reading')],
@@ -262,10 +262,15 @@ class CommandHandler {
                     [Markup.button.callback('🔄 Boshqa tasodifiy', `random_${type}`)]
                 ])
             });
-            await ctx.answerCbQuery();
+            await safeAnswerCbQuery(ctx);
         } catch (error) {
+            if (error?.response?.error_code === 400 &&
+                error?.response?.description?.includes('message is not modified')) {
+                await safeAnswerCbQuery(ctx);
+                return;
+            }
             console.error('Random Start Error:', error);
-            await ctx.answerCbQuery('Xatolik yuz berdi.');
+            await safeAnswerCbQuery(ctx, 'Xatolik yuz berdi.');
         }
     }
 
