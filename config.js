@@ -19,11 +19,11 @@ module.exports = {
 
     // Channel Subscription Check (multiple required channels)
     REQUIRED_CHANNELS: [
-        { id: '-1003014655042', url: 'https://t.me/englishwithSanatbek', name: 'English with Sanatbek' },
+        { id: '-1003014655042', url: 'https://t.me/+9pp2qPzkYQI0MzU6', name: 'ENGLISH with Muazzama ( C1 Level)📚' },
     ],
     // Legacy (birinchi kanal — backward compatibility)
     REQUIRED_CHANNEL_ID: '-1003014655042',
-    CHANNEL_URL: 'https://t.me/englishwithSanatbek',
+    CHANNEL_URL: 'https://t.me/+9pp2qPzkYQI0MzU6',
 
     // Admin Contact
     ADMIN_USERNAME: '@khamidovsanat',
