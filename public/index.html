@@ -183,6 +183,50 @@
         .history-date { font-size: 11px; color: var(--text-secondary); }
         .history-score { font-weight: 800; color: var(--primary); background: var(--secondary-bg); padding: 4px 10px; border-radius: 12px; }
 
+        /* Recording Animation */
+        .record-btn-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .record-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 0 0 rgba(51, 144, 236, 0.4);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .record-btn.recording {
+            background: var(--danger);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .record-timer {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-main);
+            font-variant-numeric: tabular-nums;
+        }
+
         .hidden { display: none; }
     </style>
 </head>
@@ -212,12 +256,15 @@
                     </div>
                 </div>
                 
-                <input type="file" id="audio-file" accept="audio/*" class="hidden">
-                <button id="btn-upload" class="btn btn-primary">
-                    <span>📤 Audioni yuklang</span>
-                </button>
+                <div class="record-btn-container">
+                    <button id="btn-record" class="record-btn">
+                        <span id="record-icon">🎤</span>
+                    </button>
+                    <div id="record-timer" class="record-timer hidden">00:00</div>
+                    <p id="record-hint" class="subtitle">Yozishni boshlash uchun bosing</p>
+                </div>
                 
-                <div id="analyze-status" class="hidden" style="margin-top: 20px; text-align: center;">
+                <div id="analyze-status" class="hidden" style="margin-top: 10px; text-align: center;">
                     <center><div class="loader" style="border-top-color: var(--primary);"></div></center>
                     <p class="subtitle" style="margin-top: 10px; font-weight: 600;">AI tahlil qilmoqda... iltimos kuting</p>
                 </div>
@@ -523,25 +570,85 @@
 
         // EVENT HANDLERS
 
-        // Analyze logic
-        const btnUpload = document.getElementById('btn-upload');
-        const audioInput = document.getElementById('audio-file');
+        // Analyze logic with Voice Recording
+        const btnRecord = document.getElementById('btn-record');
+        const recordIcon = document.getElementById('record-icon');
+        const recordTimer = document.getElementById('record-timer');
+        const recordHint = document.getElementById('record-hint');
         const analyzeStatus = document.getElementById('analyze-status');
         const resultDisplay = document.getElementById('result-display');
 
-        btnUpload.onclick = () => audioInput.click();
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let startTime = 0;
+        let timerInterval = null;
 
-        audioInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        function updateTimer() {
+            const now = Date.now();
+            const diff = Math.floor((now - startTime) / 1000);
+            const mins = Math.floor(diff / 60).toString().padStart(2, '0');
+            const secs = (diff % 60).toString().padStart(2, '0');
+            recordTimer.innerText = `${mins}:${secs}`;
+            
+            if (diff >= 60) { // Max 1 minute
+                stopRecording();
+            }
+        }
 
-            btnUpload.classList.add('hidden');
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    sendAudio(audioBlob);
+                    
+                    // Stop all tracks to release microphone
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                btnRecord.classList.add('recording');
+                recordIcon.innerText = '⏹️';
+                recordTimer.classList.remove('hidden');
+                recordHint.innerText = 'To\'xtatish uchun bosing';
+                startTime = Date.now();
+                timerInterval = setInterval(updateTimer, 1000);
+                tg.HapticFeedback.impactOccurred('medium');
+
+            } catch (err) {
+                console.error('Mic access error:', err);
+                tg.showAlert('Mikrofonga ruxsat berilmadi yoki xatolik yuz berdi.');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                clearInterval(timerInterval);
+                btnRecord.classList.remove('recording');
+                recordIcon.innerText = '🎤';
+                recordTimer.classList.add('hidden');
+                recordHint.innerText = 'Yozishni boshlash uchun bosing';
+                tg.HapticFeedback.impactOccurred('light');
+            }
+        }
+
+        async function sendAudio(blob) {
+            btnRecord.disabled = true;
             analyzeStatus.classList.remove('hidden');
             resultDisplay.classList.add('hidden');
 
             try {
                 const form = new FormData();
-                form.append('audio', file);
+                form.append('audio', blob, 'recording.webm');
+                form.append('reference_text', document.getElementById('practice-text').innerText);
                 
                 const res = await fetchAPI('/analyze-audio', 'post', form);
                 if (res.success) {
@@ -555,9 +662,16 @@
             } catch (err) {
                 tg.showAlert(err.message);
             } finally {
-                btnUpload.classList.remove('hidden');
+                btnRecord.disabled = false;
                 analyzeStatus.classList.add('hidden');
-                audioInput.value = '';
+            }
+        }
+
+        btnRecord.onclick = () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            } else {
+                startRecording();
             }
         };
 
