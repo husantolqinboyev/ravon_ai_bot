@@ -518,13 +518,17 @@ const startBot = async (retries = 5) => {
 
     app.use(express.json());
 
-    // Serve Vite build for Mini App
+    // Serve static files from 'public' and 'web/dist'
     const distPath = path.join(__dirname, 'web', 'dist');
-    const distExists = fs.existsSync(distPath);
-    if (distExists) {
+    const publicPath = path.join(__dirname, 'public');
+    
+    if (fs.existsSync(distPath)) {
         app.use(express.static(distPath));
+    } else if (fs.existsSync(publicPath)) {
+        app.use(express.static(publicPath));
+        console.log('✅ Mini App public/ papkasidan xizmat qilinmoqda.');
     } else {
-        console.warn('Mini App build topilmadi. web/dist mavjud emas.');
+        console.warn('⚠️ Mini App build topilmadi. public/ yoki web/dist mavjud emas.');
     }
 
     // API endpoints for Mini App

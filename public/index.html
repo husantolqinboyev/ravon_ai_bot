@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="uz">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Ravon AI - Professional Talaffuz Tahlili</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --secondary-bg: #f1f5f9;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --text-main: #0f172a;
+            --text-secondary: #64748b;
+            --primary: #3390ec;
+            --primary-gradient: linear-gradient(135deg, #3390ec 0%, #1e60a3 100%);
+            --premium-gradient: linear-gradient(135deg, #ff9d00 0%, #ff6b00 100%);
+            --success: #10b981;
+            --danger: #ef4444;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.6);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0f172a;
+            --secondary-bg: #1e293b;
+            --card-bg: rgba(30, 41, 59, 0.75);
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            font-family: inherit;
+        }
+
+        body {
+            font-family: "Inter", -apple-system, system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 16px 16px 100px 16px;
+            min-height: 100vh;
+            transition: background-color 0.3s ease;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        /* Typography */
+        h1, h2, h3 { margin: 0 0 8px 0; font-weight: 800; }
+        .subtitle { font-size: 14px; color: var(--text-secondary); line-height: 1.4; }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+            position: relative;
+        }
+
+        .premium-card {
+            background: var(--premium-gradient);
+            color: white;
+            border: none;
+            box-shadow: 0 10px 20px rgba(255, 157, 0, 0.3);
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 18px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .btn:active { transform: scale(0.97); opacity: 0.9; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-primary { background: var(--primary-gradient); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-secondary { background: var(--secondary-bg); color: var(--text-main); }
+
+        /* Status & Badges */
+        .badge {
+            display: inline-flex;
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .badge-premium { background: #fffbe6; color: #d97706; }
+
+        /* Inputs */
+        textarea {
+            width: 100%; height: 140px; padding: 18px;
+            background: var(--secondary-bg); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md); color: var(--text-main);
+            font-size: 15px; resize: none; margin-bottom: 16px;
+        }
+        textarea:focus { outline: 2px solid var(--primary); background: var(--card-bg); }
+        
+        select {
+            width: 100%; padding: 14px 18px;
+            background: var(--secondary-bg); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md); color: var(--text-main);
+            margin-bottom: 20px; font-size: 15px; -webkit-appearance: none;
+        }
+
+        /* Tabs */
+        .view { display: none; margin-top: 10px; animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .view.active { display: block; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Navigation */
+        .bottom-nav {
+            position: fixed; bottom: 20px; left: 16px; right: 16px;
+            background: var(--card-bg); backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px); border: 1px solid var(--glass-border);
+            border-radius: 28px; height: 72px; display: flex;
+            justify-content: space-around; align-items: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12); z-index: 1000;
+        }
+        .nav-item { flex: 1; text-align: center; color: var(--text-secondary); transition: 0.3s; }
+        .nav-item.active { color: var(--primary); }
+        .nav-icon { font-size: 24px; display: block; margin-bottom: 2px; }
+        .nav-text { font-size: 10px; font-weight: 700; text-transform: uppercase; }
+
+        /* Progress Bar */
+        .progress-bar {
+            width: 100%; height: 10px; background: var(--secondary-bg);
+            border-radius: 5px; margin: 12px 0; overflow: hidden;
+        }
+        .progress-fill { height: 100%; background: var(--primary); transition: 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        /* Loader */
+        .loader {
+            border: 3px solid rgba(255,255,255,0.2); border-top: 3px solid #fff;
+            border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Results Display */
+        .score-box { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 18px; }
+        .score-pill { 
+            background: var(--secondary-bg); padding: 18px; border-radius: var(--radius-md); 
+            text-align: center; border: 1px solid var(--glass-border);
+        }
+        .score-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; display: block; }
+        .score-val { font-size: 24px; font-weight: 900; color: var(--primary); }
+
+        /* History List */
+        .history-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px; border-bottom: 1px solid var(--secondary-bg);
+        }
+        .history-item:last-child { border-bottom: none; }
+        .history-info { flex: 1; }
+        .history-date { font-size: 11px; color: var(--text-secondary); }
+        .history-score { font-weight: 800; color: var(--primary); background: var(--secondary-bg); padding: 4px 10px; border-radius: 12px; }
+
+        .hidden { display: none; }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        
+        <!-- TOP APP BAR -->
+        <header style="margin-bottom: 28px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1 style="font-size: 26px; letter-spacing: -0.5px;">Ravon <span style="color: var(--primary);">AI</span></h1>
+                <div id="welcome-msg" class="subtitle">Assalomu alaykum!</div>
+            </div>
+            <div id="premium-ribbon" class="badge badge-premium hidden">💎 PRO</div>
+        </header>
+
+        <!-- VIEW: ANALYZE -->
+        <div id="view-analyze" class="view active">
+            <h2 style="font-size: 22px;">🎙️ Nutq Tahlili</h2>
+            <p class="subtitle" style="margin-bottom: 24px;">Talaffuzingizni baholash uchun audio faylni yuklang.</p>
+
+            <div class="card">
+                <div style="background: var(--secondary-bg); padding: 20px; border-radius: var(--radius-md); margin-bottom: 20px; border-left: 5px solid var(--primary); box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
+                    <div class="score-label" style="margin-bottom: 8px;">Mashq uchun matn:</div>
+                    <div id="practice-text" style="font-size: 17px; font-weight: 500; line-height: 1.5; color: var(--text-main);">
+                        "The quick brown fox jumps over the lazy dog."
+                    </div>
+                </div>
+                
+                <input type="file" id="audio-file" accept="audio/*" class="hidden">
+                <button id="btn-upload" class="btn btn-primary">
+                    <span>📤 Audioni yuklang</span>
+                </button>
+                
+                <div id="analyze-status" class="hidden" style="margin-top: 20px; text-align: center;">
+                    <center><div class="loader" style="border-top-color: var(--primary);"></div></center>
+                    <p class="subtitle" style="margin-top: 10px; font-weight: 600;">AI tahlil qilmoqda... iltimos kuting</p>
+                </div>
+
+                <div id="result-display" class="hidden" style="margin-top: 24px; animation: slideIn 0.5s;">
+                    <div class="score-box">
+                        <div class="score-pill">
+                            <span class="score-label">Umumiy ball</span>
+                            <span id="score-total" class="score-val">0</span>
+                        </div>
+                        <div class="score-pill">
+                            <span class="score-label">Aniqlik</span>
+                            <span id="score-accuracy" class="score-val">0%</span>
+                        </div>
+                    </div>
+                    <div class="card" style="padding: 16px; background: var(--secondary-bg); border: none; margin-bottom: 0;">
+                        <span class="score-label">Fikr va tavsiyalar:</span>
+                        <p id="feedback-content" style="font-size: 14px; line-height: 1.7; margin-top: 8px; color: var(--text-main); font-weight: 500;"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: TTS -->
+        <div id="view-tts" class="view">
+            <h2 style="font-size: 22px;">🔊 Audio Yaratish</h2>
+            <p class="subtitle" style="margin-bottom: 24px;">Matnni professional darajada ovozga aylantiring.</p>
+
+            <div class="card">
+                <textarea id="tts-text-input" placeholder="Inglizcha matnni kiriting..."></textarea>
+                
+                <div class="score-label" style="margin-bottom: 8px;">Diktorni tanlang:</div>
+                <select id="tts-voice-select">
+                    <option value="en-US-JennyNeural">🇺🇸 Jenny (Ayol)</option>
+                    <option value="en-US-GuyNeural">🇺🇸 Guy (Erkak)</option>
+                    <option value="en-GB-SoniaNeural">🇬🇧 Sonia (Kuzgi)</option>
+                    <option value="uz-UZ-MadinaNeural">🇺🇿 Madina (Beta)</option>
+                </select>
+
+                <button id="btn-generate-tts" class="btn btn-success">
+                    <span>⚡ Ovozga aylantirish</span>
+                </button>
+
+                <div id="tts-loading" class="hidden" style="margin-top: 20px; text-align: center;">
+                    <center><div class="loader" style="border-top-color: var(--success);"></div></center>
+                    <p class="subtitle" style="margin-top: 10px;">Ovoz generatsiya bo'lmoqda...</p>
+                </div>
+
+                <div id="tts-player-box" class="hidden" style="margin-top: 24px;">
+                    <audio id="audio-player" controls style="width: 100%; height: 45px;"></audio>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: PROFILE -->
+        <div id="view-profile" class="view">
+            <h2 style="font-size: 22px;">📊 Mening Profilim</h2>
+            
+            <div class="card" style="text-align: center; padding-top: 40px;">
+                <div id="avatar" style="width: 90px; height: 90px; background: var(--primary-gradient); border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 36px; color: white; font-weight: 800; border: 4px solid var(--glass-border); box-shadow: 0 15px 30px rgba(0,0,0,0.15);">
+                    R
+                </div>
+                <h3 id="user-name" style="font-size: 24px; margin-bottom: 5px;">Foydalanuvchi</h3>
+                <div id="sub-status" class="badge">FREE PLAN</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 28px;">
+                    <div style="background: var(--secondary-bg); padding: 18px; border-radius: var(--radius-md);">
+                        <span id="stat-count" style="font-size: 24px; font-weight: 800; display: block; color: var(--primary);">0</span>
+                        <span class="score-label">Jami tahlillar</span>
+                    </div>
+                    <div style="background: var(--secondary-bg); padding: 18px; border-radius: var(--radius-md);">
+                        <span id="stat-avg-score" style="font-size: 24px; font-weight: 800; display: block; color: var(--primary);">0%</span>
+                        <span class="score-label">O'rtacha ball</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📉 Kunlik Limit</h3>
+                <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                    <span class="subtitle">Bugungi foydalanish:</span>
+                    <span id="limit-label" style="font-weight: 800; color: var(--primary);">0 / 3</span>
+                </div>
+                <div class="progress-bar"><div id="limit-bar" class="progress-fill" style="width: 0%;"></div></div>
+                <p id="limit-tip" class="subtitle" style="font-size: 12px; margin-top: 8px;">Limit tugaganda Premium obuna oling yoki do'stlaringizni taklif qiling.</p>
+            </div>
+
+            <div class="card" id="history-card" style="padding: 16px;">
+                <h3 style="margin-bottom: 12px;">🕒 Oxirgi urinishlar</h3>
+                <div id="history-list">
+                    <p class="subtitle" style="text-align: center; padding: 20px;">Tarix yuklanmoqda...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: PLANS -->
+        <div id="view-plans" class="view">
+            <h2 style="font-size: 22px;">💎 Tarif Rejalari</h2>
+            <p class="subtitle" style="margin-bottom: 24px;">O'zingizga mos tarifni tanlang va cheklovlarsiz foydalaning.</p>
+
+            <div id="plans-container"></div>
+
+            <div class="card" style="background: var(--secondary-bg); border-style: dashed; border-color: var(--primary); text-align: center;">
+                <h3 style="color: var(--primary);">🎁 Bonus Oling!</h3>
+                <p class="subtitle">Har bir taklif qilingan 3-chi do'stingiz uchun +3 ta bonus limit ga ega bo'ling.</p>
+                <button id="btn-invite" class="btn btn-secondary" style="margin-top: 16px; border: 1px solid var(--primary); color: var(--primary); font-weight: 800;">
+                    🔗 Havolani ulashish
+                </button>
+            </div>
+        </div>
+
+        <!-- NAVIGATION -->
+        <nav class="bottom-nav">
+            <div class="nav-item active" onclick="switchTab('analyze', this)">
+                <span class="nav-icon">🎙️</span><span class="nav-text">Tahlil</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('tts', this)">
+                <span class="nav-icon">🔊</span><span class="nav-text">Ovoz</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('profile', this)">
+                <span class="nav-icon">👤</span><span class="nav-text">Profil</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('plans', this)">
+                <span class="nav-icon">💎</span><span class="nav-text">Tariflar</span>
+            </div>
+        </nav>
+
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+
+        const API_URL = '/api';
+        let userProfile = null;
+
+        // Auto theme detection
+        function applyTheme() {
+            const theme = tg.colorScheme || 'light';
+            document.body.setAttribute('data-theme', theme);
+            tg.setHeaderColor(theme === 'dark' ? '#0f172a' : '#f8fafc');
+            tg.setBackgroundColor(theme === 'dark' ? '#0f172a' : '#f8fafc');
+        }
+        applyTheme();
+
+        // API Helper
+        async function fetchAPI(endpoint, method = 'get', body = null) {
+            const headers = { 'x-telegram-init-data': tg.initData };
+            const options = { method, headers };
+
+            if (body && !(body instanceof FormData)) {
+                headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            } else if (body instanceof FormData) {
+                options.body = body;
+            }
+
+            const response = await fetch(`${API_URL}${endpoint}`, options);
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: 'Serverda xatolik' }));
+                throw new Error(err.error || 'Server xatosi');
+            }
+            return response.json();
+        }
+
+        // Initialize App Data
+        async function loadAppData() {
+            try {
+                const data = await fetchAPI('/user-data');
+                userProfile = data.user;
+                
+                // Header UI
+                document.getElementById('welcome-msg').innerText = `Salom, ${userProfile.first_name}!`;
+                if (userProfile.is_premium) {
+                    document.getElementById('premium-ribbon').classList.remove('hidden');
+                    document.getElementById('sub-status').className = 'badge badge-premium';
+                    document.getElementById('sub-status').innerText = '💎 PREMIUM USER';
+                }
+
+                // Profile UI
+                document.getElementById('user-name').innerText = `${userProfile.first_name} ${userProfile.last_name || ''}`;
+                document.getElementById('avatar').innerText = userProfile.first_name.charAt(0);
+                document.getElementById('stat-count').innerText = data.stats.total_assessments || 0;
+                document.getElementById('stat-avg-score').innerText = Math.round(data.stats.avg_overall || 0) + '%';
+                
+                // Limits UI
+                const used = userProfile.used_today || 0;
+                const limit = userProfile.daily_limit || 3;
+                document.getElementById('limit-label').innerText = `${used} / ${limit}`;
+                document.getElementById('limit-bar').style.width = `${Math.min(100, (used / limit) * 100)}%`;
+
+                // History
+                loadHistory();
+                
+                // Tariffs
+                renderTariffsList(data.tariffs);
+
+            } catch (err) {
+                console.error(err);
+                tg.showAlert('Ma\'lumotlarni yuklashda xatolik: ' + err.message);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const history = await fetchAPI('/assessments');
+                const list = document.getElementById('history-list');
+                list.innerHTML = '';
+                
+                if (history.length === 0) {
+                    list.innerHTML = '<p class="subtitle" style="text-align: center; padding: 15px;">Hali urinishlar yo\'q.</p>';
+                } else {
+                    history.forEach(item => {
+                        const date = new Date(item.created_at).toLocaleDateString();
+                        const time = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        list.innerHTML += `
+                            <div class="history-item">
+                                <div class="history-info">
+                                    <div style="font-weight: 700; font-size: 14px;">${item.type === 'compare' ? 'Taqqoslash' : 'Test'}</div>
+                                    <div class="history-date">${date} • ${time}</div>
+                                </div>
+                                <div class="history-score">${item.overall_score}%</div>
+                            </div>
+                        `;
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function renderTariffsList(tariffs) {
+            const container = document.getElementById('plans-container');
+            container.innerHTML = '';
+            
+            tariffs.forEach(t => {
+                const isPro = t.price >= 100000;
+                const tariffCard = document.createElement('div');
+                tariffCard.className = `card ${isPro ? 'premium-card' : ''}`;
+                tariffCard.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 20px;">${t.name}</h3>
+                            <p class="subtitle" style="margin: 4px 0 0 0; ${isPro ? 'color: rgba(255,255,255,0.8)' : ''}">${t.duration_days} kunga cheksizlik</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 22px; font-weight: 900;">${t.price.toLocaleString()} so'm</div>
+                        </div>
+                    </div>
+                    <ul style="margin: 16px 0 0 0; padding-left: 20px; font-size: 13px; line-height: 1.8; ${isPro ? 'color: white' : ''}">
+                        <li>Kunlik chegara: ${t.limit_per_day} ta</li>
+                        <li>Matn uzunligi: ${t.word_limit} so'z</li>
+                        <li>To'liq PDF hisobot</li>
+                    </ul>
+                    <button class="btn ${isPro ? 'btn-secondary' : 'btn-primary'}" onclick="handleTariffSelection('${t.id}')" style="margin-top: 20px; font-size: 14px; height: 50px;">
+                        Tanlash va faollashtirish
+                    </button>
+                `;
+                container.appendChild(tariffCard);
+            });
+        }
+
+        async function handleTariffSelection(id) {
+            tg.showConfirm("Ushbu tarif rejasini tanlaysizmi? To'lov ma'lumotlari generatsiya qilinishi uchun botga xabar yuboriladi.", (ok) => {
+                if (ok) {
+                    tg.sendData(JSON.stringify({ source: 'mini_app', action: 'select_tariff_' + id }));
+                    tg.close();
+                }
+            });
+        }
+
+        // Toggle Tabs
+        window.switchTab = (tab, el) => {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.getElementById(`view-${tab}`).classList.add('active');
+            el.classList.add('active');
+            tg.HapticFeedback.selectionChanged();
+        };
+
+        // EVENT HANDLERS
+
+        // Analyze logic
+        const btnUpload = document.getElementById('btn-upload');
+        const audioInput = document.getElementById('audio-file');
+        const analyzeStatus = document.getElementById('analyze-status');
+        const resultDisplay = document.getElementById('result-display');
+
+        btnUpload.onclick = () => audioInput.click();
+
+        audioInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            btnUpload.classList.add('hidden');
+            analyzeStatus.classList.remove('hidden');
+            resultDisplay.classList.add('hidden');
+
+            try {
+                const form = new FormData();
+                form.append('audio', file);
+                
+                const res = await fetchAPI('/analyze-audio', 'post', form);
+                if (res.success) {
+                    document.getElementById('score-total').innerText = res.data.overallScore;
+                    document.getElementById('score-accuracy').innerText = res.data.accuracyScore + '%';
+                    document.getElementById('feedback-content').innerText = res.data.detailedFeedback.phoneticAnalysis.prosodyFeedback;
+                    resultDisplay.classList.remove('hidden');
+                    tg.HapticFeedback.notificationOccurred('success');
+                    loadAppData(); // Update stats
+                }
+            } catch (err) {
+                tg.showAlert(err.message);
+            } finally {
+                btnUpload.classList.remove('hidden');
+                analyzeStatus.classList.add('hidden');
+                audioInput.value = '';
+            }
+        };
+
+        // TTS logic
+        const btnTts = document.getElementById('btn-generate-tts');
+        const ttsInput = document.getElementById('tts-text-input');
+        const voiceSelect = document.getElementById('tts-voice-select');
+        const ttsLoading = document.getElementById('tts-loading');
+        const ttsPlayerBox = document.getElementById('tts-player-box');
+        const audioPlayer = document.getElementById('audio-player');
+
+        btnTts.onclick = async () => {
+            const text = ttsInput.value.trim();
+            if (!text) return tg.showAlert('Iltimos matnni kiriting');
+
+            btnTts.classList.add('hidden');
+            ttsLoading.classList.remove('hidden');
+            ttsPlayerBox.classList.add('hidden');
+
+            try {
+                const response = await fetch(`${API_URL}/text-to-speech`, {
+                    method: 'POST',
+                    headers: { 'x-telegram-init-data': tg.initData, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice: voiceSelect.value })
+                });
+
+                if (!response.ok) throw new Error('Audio yaratishda xato');
+                const blob = await response.blob();
+                audioPlayer.src = URL.createObjectURL(blob);
+                ttsPlayerBox.classList.remove('hidden');
+                audioPlayer.play();
+                tg.HapticFeedback.notificationOccurred('success');
+            } catch (err) {
+                tg.showAlert(err.message);
+            } finally {
+                btnTts.classList.remove('hidden');
+                ttsLoading.classList.add('hidden');
+            }
+        };
+
+        // Invite logic
+        document.getElementById('btn-invite').onclick = () => {
+            const refLink = `https://t.me/ravon_ai_bot?start=${tg.initDataUnsafe.user.id}`;
+            const text = encodeURIComponent('Ingliz tili talaffuzini Ravon AI bilan bepul tahlil qilib ko\'ring! 🚀');
+            tg.openLink(`https://t.me/share/url?url=${refLink}&text=${text}`);
+        };
+
+        // Start
+        loadAppData();
+    </script>
+</body>
+
+</html>
