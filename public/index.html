@@ -352,6 +352,12 @@
         tg.expand();
         tg.ready();
 
+        // Debug info (development vaqtida foydali)
+        console.log('Telegram WebApp initialized');
+        if (!tg.initData) {
+            console.warn('Telegram initData is missing. App is likely running outside of Telegram.');
+        }
+
         const API_URL = '/api';
         let userProfile = null;
 
@@ -386,6 +392,19 @@
 
         // Initialize App Data
         async function loadAppData() {
+            // Check if initData exists
+            if (!tg.initData) {
+                const welcomeMsg = document.getElementById('welcome-msg');
+                welcomeMsg.innerText = '⚠️ Xatolik: Bot orqali kiring';
+                welcomeMsg.style.color = 'var(--danger)';
+                
+                tg.showAlert('Iltimos, bot ichidagi "Mini App" tugmasi orqali kiring. Brauzerda to\'g\'ridan-to\'g\'ri ochib bo\'lmaydi.', () => {
+                    // Xabar yopilgach, agar botda bo'lsa yopishga harakat qiladi
+                    if (tg.close) tg.close();
+                });
+                return;
+            }
+
             try {
                 const data = await fetchAPI('/user-data');
                 userProfile = data.user;
@@ -417,7 +436,10 @@
                 renderTariffsList(data.tariffs);
 
             } catch (err) {
-                console.error(err);
+                console.error('Data loading error:', err);
+                const welcomeMsg = document.getElementById('welcome-msg');
+                welcomeMsg.innerText = '⚠️ Ma\'lumot yuklanmadi';
+                welcomeMsg.style.color = 'var(--danger)';
                 tg.showAlert('Ma\'lumotlarni yuklashda xatolik: ' + err.message);
             }
         }

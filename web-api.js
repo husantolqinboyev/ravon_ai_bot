@@ -12,7 +12,10 @@ const router = express.Router();
 // Middleware to verify Telegram Mini App initData
 const verifyTelegramWebAppData = (req, res, next) => {
     const initData = req.headers['x-telegram-init-data'];
+    
     if (!initData) {
+        console.warn('Mini App Auth Failed: Missing x-telegram-init-data header');
+        console.log('Available headers:', req.headers); // Debugging uchun hamma headerlarni chiqarish
         return res.status(401).json({ error: 'Missing Telegram initData' });
     }
 
