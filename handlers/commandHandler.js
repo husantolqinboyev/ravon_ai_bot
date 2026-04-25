@@ -857,39 +857,60 @@ class CommandHandler {
             await ctx.answerCbQuery('Avval xabar yuboring.', { show_alert: true }).catch(() => { });
             return;
         }
-        const users = await database.getAllUsers();
+
+        const totalUsers = await database.getUsersCount();
         await ctx.answerCbQuery().catch(() => { });
-        await ctx.reply(`Yuborilmoqda: ${users.length} ta foydalanuvchi`).catch(() => { });
+        const statusMsg = await ctx.reply(`🚀 E'lon yuborish boshlandi...\nJami foydalanuvchilar: ${totalUsers}`).catch(() => { });
+        
         const keyboard = b.buttons && b.buttons.length > 0 ? { reply_markup: Markup.inlineKeyboard(b.buttons.map(btn => [Markup.button.url(btn.text, btn.url)])).reply_markup } : {};
+        
         let successCount = 0;
         let failCount = 0;
-        for (const user of users) {
-            try {
-                if (b.content.type === 'text') {
-                    await ctx.telegram.sendMessage(user.telegram_id, b.content.text, keyboard);
-                } else if (b.content.type === 'photo') {
-                    await ctx.telegram.sendPhoto(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
-                } else if (b.content.type === 'video') {
-                    await ctx.telegram.sendVideo(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
-                } else if (b.content.type === 'document') {
-                    await ctx.telegram.sendDocument(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
-                } else if (b.content.type === 'audio') {
-                    await ctx.telegram.sendAudio(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
-                } else if (b.content.type === 'voice') {
-                    await ctx.telegram.sendVoice(user.telegram_id, b.content.file_id, keyboard);
+        const batchSize = 1000;
+
+        for (let offset = 0; offset < totalUsers; offset += batchSize) {
+            const users = await database.getUsersPaged(offset, batchSize);
+            
+            for (const user of users) {
+                try {
+                    if (b.content.type === 'text') {
+                        await ctx.telegram.sendMessage(user.telegram_id, b.content.text, keyboard);
+                    } else if (b.content.type === 'photo') {
+                        await ctx.telegram.sendPhoto(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                    } else if (b.content.type === 'video') {
+                        await ctx.telegram.sendVideo(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                    } else if (b.content.type === 'document') {
+                        await ctx.telegram.sendDocument(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                    } else if (b.content.type === 'audio') {
+                        await ctx.telegram.sendAudio(user.telegram_id, b.content.file_id, { caption: b.content.caption || '', ...keyboard });
+                    } else if (b.content.type === 'voice') {
+                        await ctx.telegram.sendVoice(user.telegram_id, b.content.file_id, keyboard);
+                    }
+                    successCount++;
+                } catch (e) {
+                    failCount++;
                 }
-                successCount++;
-                if (successCount % 20 === 0) {
+
+                // Telegram Flood Limits: ~30 messages per second
+                if ((successCount + failCount) % 25 === 0) {
                     await new Promise(r => setTimeout(r, 1000));
                 }
-            } catch (e) {
-                console.error('Broadcast send error:', e.message);
-                failCount++;
+            }
+
+            // Progress report
+            if (statusMsg) {
+                await ctx.telegram.editMessageText(
+                    ctx.chat.id, 
+                    statusMsg.message_id, 
+                    null, 
+                    `📊 Jarayon: ${Math.min(offset + batchSize, totalUsers)}/${totalUsers}\n✅ Muvaffaqiyatli: ${successCount}\n❌ Xato: ${failCount}`
+                ).catch(() => {});
             }
         }
+
         ctx.session.state = null;
         ctx.session.broadcast = null;
-        await ctx.reply(`✅ Yakunlandi\nMuvaffaqiyatli: ${successCount}\nXato: ${failCount}`, this.adminMenu);
+        await ctx.reply(`✅ E'lon yuborish yakunlandi!\n\nMuvaffaqiyatli: ${successCount}\nXato: ${failCount}`, this.adminMenu);
     }
 
     async handleBroadcastCancel(ctx) {
@@ -1694,9 +1715,9 @@ class CommandHandler {
             "4) 💳 Tariflar | Ko‘proq foyda olish:\n" +
             "   • Tariflarni ko‘ring, sotib oling yoki referal orqali bepul limit oling";
         const buttons = [
-            [Markup.button.url('🎥 Video qo‘llanma', config.CHANNEL_URL)]
+            [{ text: '🎥 Video qo‘llanma', url: config.CHANNEL_URL || 'https://t.me/ravonai' }]
         ];
-        await ctx.reply(msg, { ...Markup.inlineKeyboard(buttons) });
+        await ctx.reply(msg, { reply_markup: { inline_keyboard: buttons } });
     }
 
     async handleSelectTariff(ctx) {

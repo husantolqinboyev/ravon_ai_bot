@@ -5,7 +5,8 @@ class AssessmentService {
     async processAudio(user, audioBuffer, audioDuration, mimeType, type = 'general', targetText = null) {
         try {
             // Check limits
-            const canProceed = await database.checkLimit(user.id);
+            // Check limits (using telegram_id because DB expects bigint)
+            const canProceed = await database.checkLimit(user.telegram_id);
             if (!canProceed) {
                 throw new Error('LIMIT_EXCEEDED');
             }

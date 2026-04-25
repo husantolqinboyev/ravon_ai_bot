@@ -430,7 +430,38 @@ class Database {
         }
     }
 
+    async getUsersCount() {
+        try {
+            const { count, error } = await this.supabase
+                .from('users')
+                .select('*', { count: 'exact', head: true });
+            if (error) throw error;
+            return count || 0;
+        } catch (error) {
+            console.error('Error getting users count:', error);
+            return 0;
+        }
+    }
+
+    async getUsersPaged(offset = 0, limit = 1000) {
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('telegram_id')
+                .order('created_at', { ascending: true })
+                .range(offset, offset + limit - 1);
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting paged users:', error);
+            return [];
+        }
+    }
+
     async getAllUsers() {
+        // Warning: This may still be subject to limits if not paged
+        // Keeping it for backward compatibility but paged version is preferred
         try {
             const { data, error } = await this.supabase
                 .from('users')
@@ -556,8 +587,33 @@ class Database {
                 return data.id;
             }
         } catch (error) {
-            console.error('Error saving user:', error);
+            console.error('Error saving user with referrer:', error);
             throw error;
+        }
+    }
+
+    async saveUser(tgUser) {
+        try {
+            const { data, error } = await this.supabase
+                .from('users')
+                .upsert({
+                    telegram_id: tgUser.id,
+                    username: tgUser.username,
+                    first_name: tgUser.first_name,
+                    last_name: tgUser.last_name,
+                    language_code: tgUser.language_code,
+                    is_premium: tgUser.is_premium || false,
+                    updated_at: new Date()
+                }, { onConflict: 'telegram_id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data.id;
+        } catch (error) {
+            console.error('Error saving user:', error);
+            const user = await this.getUserByTelegramId(tgUser.id);
+            return user ? user.id : null;
         }
     }
 
