@@ -94,12 +94,16 @@ async function checkAllChannels(ctx) {
         const isPrivate = channel.is_private;
 
         try {
+            const chat = await ctx.telegram.getChat(id);
             const member = await ctx.telegram.getChatMember(id, userId);
             const isMember = ['member', 'administrator', 'creator'].includes(member.status);
             
+            // Auto-detect type in real-time
+            const currentIsPrivate = chat.type === 'channel' && !chat.username;
+            
             if (!isMember) {
                 // If private, try to use or create unique invite link
-                if (isPrivate) {
+                if (currentIsPrivate || isPrivate) {
                     if (userChannelLinks[id]) {
                         url = userChannelLinks[id];
                     } else {

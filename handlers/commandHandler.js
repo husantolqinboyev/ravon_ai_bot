@@ -2409,11 +2409,13 @@ class CommandHandler {
 
             let msg = `📡 *Majburiy Obuna Kanallar*\n\n`;
 
+            const escapeMd = (text) => String(text).replace(/[_*`\[]/g, '\\$&');
+
             const isFallback = channels.length > 0 && channels[0].is_fallback;
             if (isFallback) {
                 msg += `⚠️ *DIQQAT:* Kanallar bazadan emas, \`config.js\` dan olinmoqda.\n`;
                 if (channels[0].error_msg) {
-                    msg += `❌ *Xatolik:* \`${channels[0].error_msg}\`\n`;
+                    msg += `❌ *Xatolik:* \`${escapeMd(channels[0].error_msg)}\`\n`;
                     msg += `💡 *Yechim:* Iltimos, SQL skriptlarni (migratsiyalarni) Supabase-da bajaring.\n\n`;
                 }
             }
@@ -2422,7 +2424,10 @@ class CommandHandler {
                 msg += `❌ Hozircha hech qanday kanal qo'shilmagan.\n`;
             } else {
                 channels.forEach((ch, i) => {
-                    const name = ch.channel_name || ch.name || 'Nomsiz';
+                    // Markdown belgilarni escape qilish (xatolik bermasligi uchun)
+                    const escapeMd = (text) => String(text).replace(/[_*`\[]/g, '\\$&');
+                    
+                    const name = escapeMd(ch.channel_name || ch.name || 'Nomsiz');
                     const id = ch.channel_id || ch.id || '?';
                     const url = ch.channel_url || ch.url || '';
                     const isPrivate = ch.is_private ? '🔒 Maxfiy' : '📢 Ochiq';
