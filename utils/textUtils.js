@@ -36,6 +36,14 @@ function getUserWordLimit(user) {
         premium: 300
     };
 
+    // Safety check for null or undefined user
+    if (!user) {
+        return {
+            limit: defaultLimits.free,
+            type: 'free'
+        };
+    }
+
     // Determine base limit based on plan
     let baseLimit = defaultLimits.free;
     let planType = 'free';

@@ -602,8 +602,7 @@ class Database {
                     first_name: tgUser.first_name,
                     last_name: tgUser.last_name,
                     language_code: tgUser.language_code,
-                    is_premium: tgUser.is_premium || false,
-                    updated_at: new Date()
+                    is_premium: tgUser.is_premium || false
                 }, { onConflict: 'telegram_id' })
                 .select()
                 .single();
