@@ -4,6 +4,7 @@ const database = require('./database');
 const config = require('./config');
 const assessmentService = require('./services/assessmentService');
 const ttsService = require('./services/ttsService');
+const pdfService = require('./services/pdfService');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -171,28 +172,42 @@ router.post('/text-to-speech', verifyTelegramWebAppData, async (req, res) => {
 router.get('/download-pdf/:id', verifyTelegramWebAppData, async (req, res) => {
     try {
         const assessmentId = req.params.id;
-        const pdfService = require('./services/pdfService');
         
-        const { data: assessment, error } = await database.supabase
+        const { data: assessment, error } = await database.supabaseAdmin
             .from('assessments')
             .select('*, users!inner(first_name, last_name, telegram_id)')
             .eq('id', assessmentId)
             .single();
 
         if (error || !assessment) {
-            return res.status(404).json({ error: 'Assessment not found' });
+            return res.status(404).json({ error: 'Assessment topilmadi' });
         }
 
         // Verify ownership
         if (String(assessment.users.telegram_id) !== String(req.tgUser.id)) {
-            return res.status(403).json({ error: 'Access denied' });
+            return res.status(403).json({ error: 'Ruxsat yo\'q' });
         }
 
-        const pdfPath = await pdfService.generateAssessmentPDF(assessment);
+        // User va Assessment ma'lumotlarini formatlash
+        const user = {
+            first_name: assessment.users.first_name,
+            last_name: assessment.users.last_name || '',
+        };
+
+        const assessmentData = {
+            overallScore: assessment.overall_score || 0,
+            transcription: assessment.transcription || '',
+            englishLevel: assessment.english_level || 'A2',
+            detailedFeedback: typeof assessment.detailed_feedback === 'string'
+                ? JSON.parse(assessment.detailed_feedback)
+                : (assessment.detailed_feedback || {}),
+        };
+
+        const pdfPath = await pdfService.generateReport(user, assessmentData, assessment.type || 'general');
+        
         res.download(pdfPath, `Ravon_AI_Report_${assessmentId.slice(0,8)}.pdf`, (err) => {
             if (err) console.error('PDF download error:', err);
-            const fs = require('fs');
-            if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+            pdfService.cleanup(pdfPath);
         });
     } catch (error) {
         console.error('PDF Generation API Error:', error);
@@ -306,24 +321,62 @@ router.post('/send-pdf-to-bot/:id', verifyTelegramWebAppData, async (req, res) =
         const assessmentId = req.params.id;
         const telegramId = req.tgUser.id;
 
-        const assessment = await database.getAssessmentById(assessmentId);
-        if (!assessment) return res.status(404).json({ error: 'Assessment not found' });
+        // Assessment ma'lumotlarini bazadan olish
+        const { data: assessment, error: assessmentError } = await database.supabaseAdmin
+            .from('assessments')
+            .select('*, users!inner(first_name, last_name, telegram_id)')
+            .eq('id', assessmentId)
+            .single();
 
-        const pdfBuffer = await pdfService.generateAssessmentPDF(assessment);
-        
+        if (assessmentError || !assessment) {
+            console.error('Assessment not found:', assessmentError);
+            return res.status(404).json({ error: 'Assessment topilmadi' });
+        }
+
+        // Foydalanuvchi tekshiruvi
+        if (String(assessment.users.telegram_id) !== String(telegramId)) {
+            return res.status(403).json({ error: 'Ruxsat yo\'q' });
+        }
+
+        // User obyektini to'g'ri formatda tayyorlash
+        const user = {
+            first_name: assessment.users.first_name,
+            last_name: assessment.users.last_name || '',
+        };
+
+        // Assessment ma'lumotlarini pdfService.generateReport() uchun formatga keltirish
+        const assessmentData = {
+            overallScore: assessment.overall_score || 0,
+            transcription: assessment.transcription || '',
+            englishLevel: assessment.english_level || 'A2',
+            detailedFeedback: typeof assessment.detailed_feedback === 'string'
+                ? JSON.parse(assessment.detailed_feedback)
+                : (assessment.detailed_feedback || {}),
+        };
+
+        // PDF yaratish
+        const pdfPath = await pdfService.generateReport(user, assessmentData, assessment.type || 'general');
+
         // Telegram bot orqali yuborish
         const { Telegraf } = require('telegraf');
         const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
-        
-        await bot.telegram.sendDocument(telegramId, {
-            source: pdfBuffer,
-            filename: `Ravon_AI_Report_${assessmentId.slice(0, 8)}.pdf`
-        }, {
-            caption: `📄 **Sizning talaffuz tahlili hisobotingiz!**\n\nID: \`${assessmentId.slice(0, 8)}\`\nSana: ${new Date(assessment.created_at).toLocaleDateString()}`,
-            parse_mode: 'Markdown'
-        });
 
-        res.json({ success: true, message: 'PDF sent to bot' });
+        await bot.telegram.sendDocument(
+            telegramId,
+            {
+                source: require('fs').createReadStream(pdfPath),
+                filename: `Ravon_AI_Report_${assessmentId.slice(0, 8)}.pdf`
+            },
+            {
+                caption: `📄 *Sizning talaffuz tahlili hisobotingiz!*\n\n📅 Sana: ${new Date(assessment.created_at).toLocaleDateString()}\n🎯 Ball: ${assessmentData.overallScore}%`,
+                parse_mode: 'Markdown'
+            }
+        );
+
+        // Faylni tozalash
+        await pdfService.cleanup(pdfPath);
+
+        res.json({ success: true, message: 'PDF Telegram orqali yuborildi' });
     } catch (error) {
         console.error('Error sending PDF to bot:', error);
         res.status(500).json({ error: error.message });
