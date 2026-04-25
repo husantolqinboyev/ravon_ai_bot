@@ -11,11 +11,15 @@ const router = express.Router();
 
 // Middleware to verify Telegram Mini App initData
 const verifyTelegramWebAppData = (req, res, next) => {
-    const initData = req.headers['x-telegram-init-data'];
+    let initData = req.headers['x-telegram-init-data'];
+    
+    // Support init_data in query params for window.open downloads
+    if (!initData && req.query.init_data) {
+        initData = req.query.init_data;
+    }
     
     if (!initData) {
-        console.warn('Mini App Auth Failed: Missing x-telegram-init-data header');
-        console.log('Available headers:', req.headers); // Debugging uchun hamma headerlarni chiqarish
+        console.warn('Mini App Auth Failed: Missing initData');
         return res.status(401).json({ error: 'Missing Telegram initData' });
     }
 
@@ -132,6 +136,14 @@ router.post('/analyze-audio', verifyTelegramWebAppData, upload.single('audio'), 
             referenceText
         );
 
+        // Oxirgi assessment ID-ni bazadan olish (PDF uchun kerak)
+        if (result.success) {
+            const lastAssessment = await database.getLastAssessment(req.tgUser.id);
+            if (lastAssessment) {
+                result.data.id = lastAssessment.id;
+            }
+        }
+
         res.json(result);
     } catch (error) {
         console.error('API Analyze Error:', error);
@@ -142,17 +154,48 @@ router.post('/analyze-audio', verifyTelegramWebAppData, upload.single('audio'), 
 // POST text-to-speech
 router.post('/text-to-speech', verifyTelegramWebAppData, async (req, res) => {
     try {
-        const { text, voice = 'en-US-AriaNeural' } = req.body;
+        const { text, voice = 'en-US-JennyNeural' } = req.body;
         if (!text) return res.status(400).json({ error: 'Text is required' });
 
-        const audioPath = await ttsService.generateAudio(text, 'en');
-        // In a real app, you might want to serve the file or send buffer
-        // For simplicity, we'll send the audio file
+        const audioPath = await ttsService.generateAudio(text, 'en', voice);
         res.sendFile(audioPath, {}, (err) => {
             if (err) console.error('Send file error:', err);
             ttsService.cleanup(audioPath);
         });
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET PDF Report
+router.get('/download-pdf/:id', verifyTelegramWebAppData, async (req, res) => {
+    try {
+        const assessmentId = req.params.id;
+        const pdfService = require('./services/pdfService');
+        
+        const { data: assessment, error } = await database.supabase
+            .from('assessments')
+            .select('*, users!inner(first_name, last_name, telegram_id)')
+            .eq('id', assessmentId)
+            .single();
+
+        if (error || !assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        // Verify ownership
+        if (String(assessment.users.telegram_id) !== String(req.tgUser.id)) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const pdfPath = await pdfService.generateAssessmentPDF(assessment);
+        res.download(pdfPath, `Ravon_AI_Report_${assessmentId.slice(0,8)}.pdf`, (err) => {
+            if (err) console.error('PDF download error:', err);
+            const fs = require('fs');
+            if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+        });
+    } catch (error) {
+        console.error('PDF Generation API Error:', error);
         res.status(500).json({ error: error.message });
     }
 });

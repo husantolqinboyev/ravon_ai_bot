@@ -322,11 +322,22 @@
                                 <span id="score-accuracy" class="score-val">0%</span>
                             </div>
                         </div>
-                        <div class="card" style="padding: 16px; background: var(--secondary-bg); border: none; margin-bottom: 0;">
+                        <div class="card" style="padding: 16px; background: var(--secondary-bg); border: none; margin-bottom: 16px;">
                             <span class="score-label">AI fikri:</span>
                             <p id="feedback-content" style="font-size: 14px; line-height: 1.7; margin-top: 8px; color: var(--text-main); font-weight: 500;"></p>
                         </div>
-                        <button onclick="resetAnalyzeMode()" class="btn btn-primary" style="margin-top: 15px;">Yangi topshiriq</button>
+
+                        <!-- Result Actions -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                            <button id="btn-download-tts" class="btn btn-secondary" style="border: 1px solid var(--primary); color: var(--primary); height: 50px; font-size: 13px;">
+                                🔊 Ovozni eshitish
+                            </button>
+                            <button id="btn-download-pdf" class="btn btn-secondary" style="border: 1px solid var(--success); color: var(--success); height: 50px; font-size: 13px;">
+                                📄 PDF Hisobot
+                            </button>
+                        </div>
+
+                        <button onclick="resetAnalyzeMode()" class="btn btn-primary">Yangi topshiriq</button>
                     </div>
                 </div>
             </div>
@@ -753,9 +764,56 @@
                 
                 const res = await fetchAPI('/analyze-audio', 'post', form);
                 if (res.success) {
-                    document.getElementById('score-total').innerText = res.data.overallScore;
-                    document.getElementById('score-accuracy').innerText = res.data.accuracyScore + '%';
-                    document.getElementById('feedback-content').innerText = res.data.detailedFeedback.phoneticAnalysis.prosodyFeedback;
+                    const data = res.data;
+                    document.getElementById('score-total').innerText = data.overallScore || 0;
+                    document.getElementById('score-accuracy').innerText = (data.accuracyScore || 0) + '%';
+                    
+                    // Safe access to feedback
+                    let feedback = "Ajoyib harakat!";
+                    if (data.detailedFeedback) {
+                        if (data.detailedFeedback.phoneticAnalysis && data.detailedFeedback.phoneticAnalysis.prosodyFeedback) {
+                            feedback = data.detailedFeedback.phoneticAnalysis.prosodyFeedback;
+                        } else if (data.detailedFeedback.actionPlan && data.detailedFeedback.actionPlan.length > 0) {
+                            feedback = data.detailedFeedback.actionPlan[0];
+                        }
+                    }
+                    document.getElementById('feedback-content').innerText = feedback;
+                    
+                    // Button Actions
+                    document.getElementById('btn-download-pdf').onclick = () => {
+                        if (data.id) {
+                            window.open(`${API_URL}/download-pdf/${data.id}?init_data=${encodeURIComponent(tg.initData)}`, '_blank');
+                        } else {
+                            tg.showAlert('PDF yaratib bo\'lmadi (ID topilmadi)');
+                        }
+                    };
+
+                    document.getElementById('btn-download-tts').onclick = async () => {
+                        const text = referenceText;
+                        const btn = document.getElementById('btn-download-tts');
+                        const originalText = btn.innerText;
+                        btn.innerText = '⌛...';
+                        btn.disabled = true;
+
+                        try {
+                            const ttsRes = await fetch(`${API_URL}/text-to-speech`, {
+                                method: 'POST',
+                                headers: { 'x-telegram-init-data': tg.initData, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ text, voice: 'en-US-JennyNeural' })
+                            });
+                            if (ttsRes.ok) {
+                                const blob = await ttsRes.blob();
+                                const audio = new Audio(URL.createObjectURL(blob));
+                                audio.play();
+                            }
+                        } catch (e) {
+                            tg.showAlert('Ovoz yuklashda xato');
+                        } finally {
+                            btn.innerText = originalText;
+                            btn.disabled = false;
+                        }
+                    };
+
                     resultDisplay.classList.remove('hidden');
                     tg.HapticFeedback.notificationOccurred('success');
                     loadAppData(); // Update stats
