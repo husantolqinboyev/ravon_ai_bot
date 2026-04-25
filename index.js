@@ -303,6 +303,9 @@ bot.action('admin_ai_test_gen', (ctx) => commandHandler.handleAdminAiTestGenerat
 bot.action('admin_writing_topics', (ctx) => commandHandler.handleAdminWritingTopics(ctx));
 bot.action('admin_test_mgmt', (ctx) => commandHandler.handleAdminTestManagement(ctx));
 bot.action(/admin_view_questions_(.+)/, (ctx) => commandHandler.handleAdminViewQuestions(ctx));
+bot.action(/admin_del_topic_conf_(.+)/, (ctx) => commandHandler.handleAdminDeleteTopicConfirm(ctx));
+bot.action(/admin_del_topic_exec_(.+)/, (ctx) => commandHandler.handleAdminDeleteTopicExecute(ctx));
+bot.action(/admin_ai_add_q_(.+)/, (ctx) => commandHandler.handleAdminAiAddQuestions(ctx));
 bot.action(/admin_edit_q_(.+)/, (ctx) => commandHandler.handleAdminEditQuestion(ctx));
 bot.action(/admin_set_q_(time|points)_(.+)/, (ctx) => commandHandler.handleAdminSetQuestionValue(ctx));
 
@@ -399,6 +402,9 @@ bot.on('text', async (ctx, next) => {
     }
     if (ctx.session?.state === 'waiting_for_ai_test_count') {
         return commandHandler.processAiTestCountInput(ctx);
+    }
+    if (ctx.session?.state === 'waiting_for_ai_add_count') {
+        return commandHandler.processAiAddQuestionsCount(ctx);
     }
 
     if (ctx.session?.state && (ctx.session.state === 'waiting_for_q_time' || ctx.session.state === 'waiting_for_q_points')) {

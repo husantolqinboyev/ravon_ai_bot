@@ -1695,7 +1695,7 @@ class Database {
 
     async getTopicById(id) {
         try {
-            const { data, error } = await this.supabase.from('topics').select('*').eq('id', id).single();
+            const { data, error } = await this.supabaseAdmin.from('topics').select('*').eq('id', id).single();
             if (error) throw error;
             return data;
         } catch (error) {
@@ -1813,7 +1813,7 @@ class Database {
 
     async getUserResults(userId, type = null, limit = 10) {
         try {
-            let query = this.supabase.from('user_results').select('*, topic:topics(title)').eq('user_id', userId);
+            let query = this.supabaseAdmin.from('user_results').select('*, topic:topics(title)').eq('user_id', userId);
             if (type) query = query.eq('type', type);
             const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
             if (error) throw error;

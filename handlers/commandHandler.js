@@ -862,16 +862,16 @@ class CommandHandler {
         const totalUsers = await database.getUsersCount();
         await ctx.answerCbQuery().catch(() => { });
         const statusMsg = await ctx.reply(`🚀 E'lon yuborish boshlandi...\nJami foydalanuvchilar: ${totalUsers}`).catch(() => { });
-        
+
         const keyboard = b.buttons && b.buttons.length > 0 ? { reply_markup: Markup.inlineKeyboard(b.buttons.map(btn => [Markup.button.url(btn.text, btn.url)])).reply_markup } : {};
-        
+
         let successCount = 0;
         let failCount = 0;
         const batchSize = 1000;
 
         for (let offset = 0; offset < totalUsers; offset += batchSize) {
             const users = await database.getUsersPaged(offset, batchSize);
-            
+
             for (const user of users) {
                 try {
                     if (b.content.type === 'text') {
@@ -901,11 +901,11 @@ class CommandHandler {
             // Progress report
             if (statusMsg) {
                 await ctx.telegram.editMessageText(
-                    ctx.chat.id, 
-                    statusMsg.message_id, 
-                    null, 
+                    ctx.chat.id,
+                    statusMsg.message_id,
+                    null,
                     `📊 Jarayon: ${Math.min(offset + batchSize, totalUsers)}/${totalUsers}\n✅ Muvaffaqiyatli: ${successCount}\n❌ Xato: ${failCount}`
-                ).catch(() => {});
+                ).catch(() => { });
             }
         }
 
@@ -2016,9 +2016,9 @@ class CommandHandler {
         // Use tariff word limit or a safer default (100) instead of 30
         const wordLimit = payment.word_limit || payment.tariff_word_limit || 100;
         await database.approvePremium(
-            payment.user_id, 
-            payment.duration_days, 
-            payment.limit_per_day, 
+            payment.user_id,
+            payment.duration_days,
+            payment.limit_per_day,
             wordLimit,
             payment.writing_limit,
             payment.test_limit
@@ -2446,7 +2446,7 @@ class CommandHandler {
                     const id = ch.channel_id || ch.id || '?';
                     const url = ch.channel_url || ch.url || '';
                     const isPrivate = ch.is_private ? '🔒 Maxfiy' : '📢 Ochiq';
-                    
+
                     msg += `${i + 1}. <b>${name}</b> (${isPrivate})\n`;
                     msg += `   🆔 ID: <code>${id}</code>\n`;
                     msg += `   🔗 ${url}\n\n`;
@@ -2475,7 +2475,7 @@ class CommandHandler {
                 await ctx.editMessageText(msg, { parse_mode: 'HTML', ...keyboard }).catch(async () => {
                     await ctx.reply(msg, { parse_mode: 'HTML', ...keyboard });
                 });
-                await ctx.answerCbQuery().catch(() => {});
+                await ctx.answerCbQuery().catch(() => { });
             } else {
                 await ctx.reply(msg, { parse_mode: 'HTML', ...keyboard });
             }
@@ -2483,8 +2483,8 @@ class CommandHandler {
             console.error('handleChannels error:', error);
             const errMsg = `❌ <b>Xatolik yuz berdi:</b>\n<code>${error.message || error}</code>\n\nIltimos, bazaga ulanishni tekshiring.`;
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(errMsg, { parse_mode: 'HTML' }).catch(() => {});
-                await ctx.answerCbQuery('Xatolik!').catch(() => {});
+                await ctx.editMessageText(errMsg, { parse_mode: 'HTML' }).catch(() => { });
+                await ctx.answerCbQuery('Xatolik!').catch(() => { });
             } else {
                 await ctx.reply(errMsg, { parse_mode: 'HTML' });
             }
@@ -2506,7 +2506,7 @@ class CommandHandler {
             `❌ Bekor qilish uchun /admin yozing.`;
 
         if (ctx.callbackQuery) {
-            await ctx.answerCbQuery().catch(() => {});
+            await ctx.answerCbQuery().catch(() => { });
             await ctx.editMessageText(msg, { parse_mode: 'HTML' }).catch(async () => {
                 await ctx.reply(msg, { parse_mode: 'HTML' });
             });
@@ -2520,13 +2520,13 @@ class CommandHandler {
         if (!isAdmin) return;
 
         let channelId;
-        
+
         // Forward qilingan xabardan ID olish
         if (ctx.message.forward_from_chat) {
             channelId = ctx.message.forward_from_chat.id;
         } else {
             const text = ctx.message.text ? ctx.message.text.trim() : '';
-            
+
             // Bekor qilish
             if (text === '/admin' || text === '/start') {
                 ctx.session.state = null;
@@ -2543,10 +2543,10 @@ class CommandHandler {
 
         try {
             await ctx.reply('⏳ Kanal tekshirilmoqda...');
-            
+
             // Kanal ma'lumotlarini Telegramdan olish
             const chat = await ctx.telegram.getChat(channelId);
-            
+
             if (chat.type !== 'channel') {
                 return ctx.reply("❌ Bu kanal emas! Iltimos, faqat kanal qo'shing.");
             }
@@ -2559,7 +2559,7 @@ class CommandHandler {
 
             ctx.session.state = null;
             await ctx.reply(`✅ <b>Kanal muvaffaqiyatli qo'shildi!</b>\n\n📢 Nomi: <b>${channelName}</b>\n🆔 ID: <code>${channelId}</code>\n👤 Turi: ${isPrivate ? '🔒 Maxfiy' : '📢 Ochiq'}`, { parse_mode: 'HTML' });
-            
+
             return this.handleChannels(ctx);
 
         } catch (error) {
@@ -2587,14 +2587,14 @@ class CommandHandler {
             const channelName = channel ? (channel.channel_name || channel.name || 'Kanal') : channelId;
 
             await database.removeRequiredChannel(channelId);
-            await ctx.answerCbQuery(`✅ "${channelName}" kanali o'chirildi!`).catch(() => {});
+            await ctx.answerCbQuery(`✅ "${channelName}" kanali o'chirildi!`).catch(() => { });
 
             // Yangilangan ro'yxatni ko'rsatish
             return this.handleChannels(ctx);
 
         } catch (error) {
             console.error('handleRemoveChannel error:', error);
-            await ctx.answerCbQuery('❌ Kanal o\'chirishda xatolik yuz berdi.', { show_alert: true }).catch(() => {});
+            await ctx.answerCbQuery('❌ Kanal o\'chirishda xatolik yuz berdi.', { show_alert: true }).catch(() => { });
         }
     }
 
@@ -2692,12 +2692,12 @@ class CommandHandler {
         try {
             const photo = ctx.message.photo[ctx.message.photo.length - 1];
             const fileLink = await ctx.telegram.getFileLink(photo.file_id);
-            
+
             const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
             const base64Image = Buffer.from(response.data, 'binary').toString('base64');
 
             const result = await assessmentService.processWriting(ctx.from, null, topic?.id, base64Image);
-            
+
             if (result.success) {
                 let msg = `✅ *Matn aniqlandi:* \n\n_"${result.data.extractedText || 'Matnni to\'liq aniqlab bo\'lmadi'}"_\n\n`;
                 msg += result.text;
@@ -2776,7 +2776,7 @@ class CommandHandler {
         session.timer = setTimeout(async () => {
             const currentSession = testService.getSession(ctx.from.id);
             if (currentSession && currentSession.currentIndex === session.currentIndex) {
-                await ctx.reply(`⏰ Vaqt tugadi! Keyingi savolga o'tilmoqda...`).catch(() => {});
+                await ctx.reply(`⏰ Vaqt tugadi! Keyingi savolga o'tilmoqda...`).catch(() => { });
                 const result = await testService.submitAnswer(ctx.from.id, null); // null means timeout
                 if (result) {
                     if (result.isFinished) {
@@ -2792,7 +2792,7 @@ class CommandHandler {
 
         if (ctx.callbackQuery) {
             if (question.image_url) {
-                await ctx.deleteMessage().catch(() => {});
+                await ctx.deleteMessage().catch(() => { });
                 await ctx.replyWithPhoto(question.image_url, { caption: msg, parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
             } else {
                 await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
@@ -2809,7 +2809,7 @@ class CommandHandler {
     async handleTestAnswer(ctx) {
         const answerIndex = ctx.match[1];
         const session = testService.getSession(ctx.from.id);
-        
+
         if (!session) return ctx.answerCbQuery('Seans topilmadi.');
 
         // Clear timer
@@ -2829,10 +2829,10 @@ class CommandHandler {
 
     async showTestResults(ctx, result) {
         const progress = testService.getProgressBar(result.total, result.total);
-        let finalMsg = result.forceQuit 
+        let finalMsg = result.forceQuit
             ? `⚠️ *Test to'xtatildi!*\nKetma-ket 4 marta javob bermaganingiz uchun test muddatdan oldin yakunlandi.\n\n`
             : `🏁 *Test yakunlandi!*\n\n`;
-            
+
         finalMsg += `📊 Umumiy ball: *${result.score}*\n`;
         finalMsg += `📈 Natija: *${Math.round((result.score / (result.total * 1)) * 100)}%*\n\n`; // Simplified %
         finalMsg += `${progress} 100%`;
@@ -2844,7 +2844,7 @@ class CommandHandler {
         } else {
             await ctx.reply(finalMsg, { parse_mode: 'Markdown' });
         }
-        return ctx.answerCbQuery('Test yakunlandi!').catch(() => {});
+        return ctx.answerCbQuery('Test yakunlandi!').catch(() => { });
     }
 
     // --- Admin Handlers ---
@@ -2860,7 +2860,7 @@ class CommandHandler {
     async processAiTestTopicInput(ctx) {
         const topicName = ctx.message.text.trim();
         if (!topicName) return ctx.reply('Mavzu nomini kiriting.');
-        
+
         ctx.session.aiTestTopic = topicName;
         ctx.session.state = 'waiting_for_ai_test_count';
         await ctx.reply(`Mavzu: *${topicName}*\n\nNechta savol yaratilsin? (Masalan: 5, 10, 15):`, { parse_mode: 'Markdown' });
@@ -2869,7 +2869,7 @@ class CommandHandler {
     async processAiTestCountInput(ctx) {
         const countInput = ctx.message.text.trim();
         const count = parseInt(countInput);
-        
+
         if (isNaN(count) || count < 1 || count > 50) {
             return ctx.reply('Iltimos, 1 dan 50 gacha bo\'lgan raqam kiriting.');
         }
@@ -2880,11 +2880,11 @@ class CommandHandler {
         try {
             const geminiService = require('../services/geminiService');
             const questions = await geminiService.generateAiTests(topicName, count);
-            
+
             // Re-check for existing topic just before creating to avoid race conditions
             let topics = await database.getTopics('test');
             let topic = topics.find(t => t.title.trim().toLowerCase() === topicName.toLowerCase());
-            
+
             if (!topic) {
                 topic = await database.addTopic({
                     type: 'test',
@@ -2921,9 +2921,9 @@ class CommandHandler {
 
         const topics = await database.getTopics('writing');
         let msg = `📝 *Writing Mavzulari Ro'yxati*\n\n`;
-        
+
         if (topics.length === 0) msg += "_Hozircha mavzular yo'q._";
-        
+
         topics.forEach((t, i) => {
             msg += `${i + 1}. *${t.title}* (${t.category})\n`;
         });
@@ -2942,9 +2942,9 @@ class CommandHandler {
 
         const topics = await database.getTopics('test');
         let msg = `✍️ *Test Mavzulari va Boshqaruvi*\n\n`;
-        
+
         if (topics.length === 0) msg += "_Hozircha mavzular yo'q._";
-        
+
         const buttons = topics.map(t => [Markup.button.callback(`📂 ${t.title}`, `admin_view_questions_${t.id}`)]);
 
         buttons.push([Markup.button.callback('🤖 AI orqali yaratish', 'admin_ai_test_gen')]);
@@ -2959,12 +2959,96 @@ class CommandHandler {
         const questions = await database.getQuestions(topicId);
         const topic = await database.getTopicById(topicId);
 
+        if (!topic) {
+            return ctx.answerCbQuery('❌ Mavzu topilmadi.', { show_alert: true });
+        }
+
         let msg = `📂 *${topic.title}* - Savollar:\n\n`;
-        const buttons = questions.map(q => [Markup.button.callback(q.question_text.substring(0, 30) + '...', `admin_edit_q_${q.id}`)]);
+        if (questions.length === 0) msg += "_Bu mavzuda hozircha savollar yo'q._";
         
+        const buttons = questions.map(q => [Markup.button.callback(q.question_text.substring(0, 30) + '...', `admin_edit_q_${q.id}`)]);
+
+        buttons.push([Markup.button.callback('🤖 AI orqali savol qo\'shish', `admin_ai_add_q_${topic.id}`)]);
+        buttons.push([Markup.button.callback('❌ Mavzuni o\'chirish', `admin_del_topic_conf_${topic.id}`)]);
         buttons.push([Markup.button.callback('🔙 Orqaga', 'admin_test_mgmt')]);
 
         await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    async handleAdminDeleteTopicConfirm(ctx) {
+        const topicId = ctx.match[1];
+        const topic = await database.getTopicById(topicId);
+        if (!topic) return ctx.answerCbQuery('Mavzu topilmadi.');
+
+        const msg = `⚠️ *Diqqat!* \n\n"${topic.title}" mavzusini va undagi barcha savollarni o'chirib tashlamoqchimisiz?`;
+        const buttons = [
+            [Markup.button.callback('✅ Ha, o\'chirish', `admin_del_topic_exec_${topic.id}`)],
+            [Markup.button.callback('❌ Yo\'q, bekor qilish', `admin_view_questions_${topic.id}`)]
+        ];
+
+        await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    async handleAdminDeleteTopicExecute(ctx) {
+        const topicId = ctx.match[1];
+        try {
+            await database.deleteTopic(topicId);
+            await ctx.answerCbQuery('✅ Mavzu muvaffaqiyatli o\'chirildi.', { show_alert: true });
+            return this.handleAdminTestManagement(ctx);
+        } catch (error) {
+            console.error('Delete topic error:', error);
+            await ctx.answerCbQuery('❌ O\'chirishda xatolik yuz berdi.');
+        }
+    }
+
+    async handleAdminAiAddQuestions(ctx) {
+        const topicId = ctx.match[1];
+        const topic = await database.getTopicById(topicId);
+        if (!topic) return ctx.answerCbQuery('Mavzu topilmadi.');
+
+        ctx.session.aiTestTargetTopicId = topicId;
+        ctx.session.aiTestTopic = topic.title;
+        ctx.session.state = 'waiting_for_ai_add_count';
+
+        await ctx.reply(`"${topic.title}" mavzusiga yana nechta AI savol qo'shmoqchisiz?\n(Masalan: 5, 10):`);
+        await ctx.answerCbQuery();
+    }
+
+    async processAiAddQuestionsCount(ctx) {
+        const count = parseInt(ctx.message.text);
+        if (isNaN(count) || count < 1 || count > 50) {
+            return ctx.reply('Iltimos, 1 dan 50 gacha bo\'lgan raqam kiriting.');
+        }
+
+        const topicId = ctx.session.aiTestTargetTopicId;
+        const topicName = ctx.session.aiTestTopic;
+        const statusMsg = await ctx.reply('AI yangi savollar yaratmoqda... ⏳');
+
+        try {
+            const geminiService = require('../services/geminiService');
+            const questions = await geminiService.generateAiTests(topicName, count);
+
+            for (const q of questions) {
+                await database.addQuestion({
+                    topic_id: topicId,
+                    question_text: q.question_text,
+                    options: q.options,
+                    correct_option: q.correct_option,
+                    time_limit: q.time_limit || 12,
+                    points: q.points || 1,
+                    tags: q.tags
+                });
+            }
+
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, `✅ "${topicName}" mavzusiga AI orqali ${questions.length} ta yangi savol muvaffaqiyatli qo'shildi.`);
+        } catch (error) {
+            console.error('AI add q error:', error);
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, '❌ Savollar qo\'shishda xatolik yuz berdi.');
+        } finally {
+            ctx.session.state = null;
+            ctx.session.aiTestTargetTopicId = null;
+            ctx.session.aiTestTopic = null;
+        }
     }
 
     async handleAdminEditQuestion(ctx) {
