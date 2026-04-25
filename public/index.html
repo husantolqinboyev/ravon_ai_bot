@@ -166,12 +166,22 @@
 
         /* Results Display */
         .score-box { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 18px; }
-        .score-pill { 
-            background: var(--secondary-bg); padding: 18px; border-radius: var(--radius-md); 
-            text-align: center; border: 1px solid var(--glass-border);
+        .score-pill { flex: 1; text-align: center; background: var(--secondary-bg); padding: 12px; border-radius: var(--radius-md); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .score-val { display: block; font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 4px; }
+        .score-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); font-weight: 700; }
+        
+        #feedback-content {
+            white-space: pre-wrap;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
         }
-        .score-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; display: block; }
-        .score-val { font-size: 24px; font-weight: 900; color: var(--primary); }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
 
         /* History List */
         .history-item {
@@ -752,6 +762,42 @@
             }
         }
 
+        function formatDetailedFeedback(data) {
+            const df = data.detailedFeedback || {};
+            const scores = [
+                `🎯 Talaffuz aniqligi: ${data.accuracyScore || 0}%`,
+                `⚡ Ravonlik (Fluency): ${data.fluencyScore || 0}%`,
+                `🎵 Ohang (Prosody): ${data.prosodyScore || 0}%`,
+                `✅ To'liqlik: ${data.completenessScore || 0}%`,
+                `📊 To'g'ri o'qilgan so'zlar: ${data.wordAccuracy || 0}%`
+            ].join('\n');
+
+            let feedbackStr = `🎯 **TALAFFUZ TESTI NATIJASI**\n━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+            feedbackStr += `🏆 **UMUMIY NATIJA: ${data.overallScore || 0}/100**\n`;
+            feedbackStr += `🎓 **DARAJA: ${data.englishLevel || 'B1'}**\n\n`;
+            feedbackStr += `📝 **KO'RSATKICHLAR:**\n${scores}\n\n`;
+            
+            if (data.transcription) {
+                feedbackStr += `💬 **TRANSKRIPSIYA:**\n"${data.transcription}"\n\n`;
+            }
+
+            if (df.phoneticAnalysis?.prosodyFeedback) {
+                feedbackStr += `🎵 **OHANG VA RITM:**\n${df.phoneticAnalysis.prosodyFeedback}\n\n`;
+            }
+
+            if (df.strengths && df.strengths.length > 0) {
+                feedbackStr += `🌟 **KUCHLI TOMONLARINGIZ:**\n${df.strengths.map(s => '✅ ' + s).join('\n')}\n\n`;
+            }
+
+            if (df.actionPlan && df.actionPlan.length > 0) {
+                feedbackStr += `📈 **RIVOJLANISH REJASI:**\n${df.actionPlan.map(a => '🚀 ' + a).join('\n')}\n\n`;
+            }
+
+            feedbackStr += `━━━━━━━━━━━━━━━━━━━━━━\n**Ravon AI • Professional Tahlil**`;
+            
+            return feedbackStr.replace(/\n/g, '<br>');
+        }
+
         async function sendAudio(blob, referenceText) {
             btnRecord.disabled = true;
             const statusEl = document.getElementById('analyze-status');
@@ -776,35 +822,38 @@
                     document.getElementById('score-total').innerText = data.overallScore || 0;
                     document.getElementById('score-accuracy').innerText = (data.accuracyScore || 0) + '%';
                     
-                    // Feedbackni aniqlash
-                    let feedback = "Tahlil yakunlandi.";
-                    if (data.detailedFeedback) {
-                        const df = data.detailedFeedback;
-                        if (typeof df === 'string') {
-                            try {
-                                const parsed = JSON.parse(df);
-                                feedback = parsed.phoneticAnalysis?.prosodyFeedback || parsed.actionPlan?.[0] || feedback;
-                            } catch(e) { feedback = df; }
-                        } else {
-                            feedback = df.phoneticAnalysis?.prosodyFeedback || df.actionPlan?.[0] || feedback;
-                        }
-                    }
-                    document.getElementById('feedback-content').innerText = feedback;
+                    // Feedbackni chiroyli formatlash
+                    const formattedFeedback = formatDetailedFeedback(data);
+                    document.getElementById('feedback-content').innerHTML = formattedFeedback;
                     
-                    // PDF va TTS tugmalari
-                    document.getElementById('btn-download-pdf').onclick = () => {
+                    // PDF tugmasini sozlash
+                    const pdfBtn = document.getElementById('btn-download-pdf');
+                    pdfBtn.disabled = false;
+                    pdfBtn.innerHTML = '📄 PDF Hisobot';
+                    pdfBtn.onclick = async () => {
                         if (data.id) {
-                            const url = `${API_URL}/download-pdf/${data.id}?init_data=${encodeURIComponent(tg.initData)}`;
-                            tg.openLink(url);
-                        } else {
-                            tg.showAlert('PDF ID topilmadi');
+                            pdfBtn.disabled = true;
+                            pdfBtn.innerHTML = '⌛...';
+                            try {
+                                const sendRes = await fetchAPI(`/send-pdf-to-bot/${data.id}`, 'post');
+                                if (sendRes.success) {
+                                    tg.showAlert('📄 Hisobot botga yuborildi! Botga o\'tib yuklab olishingiz mumkin.');
+                                    pdfBtn.innerHTML = '✅ Yuborildi';
+                                } else {
+                                    throw new Error(sendRes.error || 'Yuborishda xato');
+                                }
+                            } catch (e) {
+                                tg.showAlert('Xato: ' + e.message);
+                                pdfBtn.disabled = false;
+                                pdfBtn.innerHTML = '📄 PDF Hisobot';
+                            }
                         }
                     };
 
                     document.getElementById('btn-download-tts').onclick = async () => {
                         const btn = document.getElementById('btn-download-tts');
-                        const oldText = btn.innerText;
-                        btn.innerText = '⌛...';
+                        const oldText = btn.innerHTML;
+                        btn.innerHTML = '⌛...';
                         try {
                             const ttsRes = await fetch(`${API_URL}/text-to-speech`, {
                                 method: 'POST',
@@ -817,7 +866,7 @@
                                 audio.play();
                             }
                         } catch (e) { console.error(e); }
-                        btn.innerText = oldText;
+                        btn.innerHTML = oldText;
                     };
 
                     // Natijani ko'rsatish

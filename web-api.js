@@ -300,4 +300,34 @@ router.get('/materials', verifyTelegramWebAppData, async (req, res) => {
     }
 });
 
+// POST send PDF to bot
+router.post('/send-pdf-to-bot/:id', verifyTelegramWebAppData, async (req, res) => {
+    try {
+        const assessmentId = req.params.id;
+        const telegramId = req.tgUser.id;
+
+        const assessment = await database.getAssessmentById(assessmentId);
+        if (!assessment) return res.status(404).json({ error: 'Assessment not found' });
+
+        const pdfBuffer = await pdfService.generateAssessmentPDF(assessment);
+        
+        // Telegram bot orqali yuborish
+        const { Telegraf } = require('telegraf');
+        const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
+        
+        await bot.telegram.sendDocument(telegramId, {
+            source: pdfBuffer,
+            filename: `Ravon_AI_Report_${assessmentId.slice(0, 8)}.pdf`
+        }, {
+            caption: `📄 **Sizning talaffuz tahlili hisobotingiz!**\n\nID: \`${assessmentId.slice(0, 8)}\`\nSana: ${new Date(assessment.created_at).toLocaleDateString()}`,
+            parse_mode: 'Markdown'
+        });
+
+        res.json({ success: true, message: 'PDF sent to bot' });
+    } catch (error) {
+        console.error('Error sending PDF to bot:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
