@@ -7,7 +7,8 @@ class GeminiService {
             console.error("OPENROUTER_API_KEY topilmadi!");
             return;
         }
-        this.apiKey = config.OPENROUTER_API_KEY;
+        // Sanitizatsiya: hamma bo'shliqlar va g'alati belgilarni olib tashlaymiz
+        this.apiKey = config.OPENROUTER_API_KEY ? config.OPENROUTER_API_KEY.replace(/[\n\r\t\s]/g, '') : null;
         this.modelName = config.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
     }
 

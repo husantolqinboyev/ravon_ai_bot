@@ -5,6 +5,12 @@ class AssessmentService {
     async processAudio(user, audioBuffer, audioDuration, mimeType, type = 'general', targetText = null) {
         try {
             // Check limits
+            console.log('AssessmentService.processAudio - User:', JSON.stringify({
+                id: user?.id,
+                telegram_id: user?.telegram_id,
+                username: user?.username
+            }));
+
             // Check limits (using telegram_id because DB expects bigint)
             const canProceed = await database.checkLimit(user.telegram_id);
             if (!canProceed) {
@@ -46,7 +52,7 @@ class AssessmentService {
                     feedback: JSON.stringify(assessment.detailedFeedback)
                 });
                 // Faqat muvaffaqiyatli saqlanganda limitni oshiramiz
-                await database.incrementUsage(user.id);
+                await database.incrementUsage(user.telegram_id);
             } catch (dbError) {
                 const cleanMsg = this._cleanErrorMessage(dbError);
                 console.error('DB save error (soft-fail):', cleanMsg);
