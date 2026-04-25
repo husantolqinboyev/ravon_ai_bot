@@ -2857,15 +2857,30 @@ class CommandHandler {
         await ctx.reply('🤖 *AI Test Yaratish*\n\nIltimos, mavzu nomini yozing (masalan: "Present Simple"):', { parse_mode: 'Markdown' });
     }
 
-    async processAiTestGeneration(ctx) {
+    async processAiTestTopicInput(ctx) {
         const topicName = ctx.message.text;
+        ctx.session.aiTestTopic = topicName;
+        ctx.session.state = 'waiting_for_ai_test_count';
+        await ctx.reply(`Mavzu: *${topicName}*\n\nNechta savol yaratilsin? (Masalan: 5, 10, 15):`, { parse_mode: 'Markdown' });
+    }
+
+    async processAiTestCountInput(ctx) {
+        const count = parseInt(ctx.message.text);
+        if (isNaN(count) || count < 1 || count > 50) {
+            return ctx.reply('Iltimos, 1 dan 50 gacha bo\'lgan raqam kiriting.');
+        }
+
+        const topicName = ctx.session.aiTestTopic;
         const statusMsg = await ctx.reply('AI savollar yaratmoqda... ⏳');
 
         try {
-            const questions = await geminiService.generateAiTests(topicName, 5);
+            const geminiService = require('../services/geminiService');
+            const questions = await geminiService.generateAiTests(topicName, count);
             
-            // Create a temporary topic for these questions or find existing
-            let topic = (await database.getTopics('test')).find(t => t.title === topicName);
+            // Use supabaseAdmin for topics to bypass RLS
+            let topics = await database.getTopics('test');
+            let topic = topics.find(t => t.title.toLowerCase() === topicName.toLowerCase());
+            
             if (!topic) {
                 topic = await database.addTopic({
                     type: 'test',
@@ -2887,12 +2902,13 @@ class CommandHandler {
                 });
             }
 
-            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, `✅ AI orqali ${questions.length} ta savol yaratildi va "${topicName}" mavzusiga qo'shildi.`);
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, `✅ AI orqali ${questions.length} ta savol yaratildi va "${topicName}" mavzusiga muvaffaqiyatli qo'shildi.`);
         } catch (error) {
             console.error('AI test gen error:', error);
-            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, '❌ Savollar yaratishda xatolik yuz berdi.');
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, '❌ Savollar yaratishda xatolik yuz berdi. Iltimos, qayta urinib ko\'ring.');
         } finally {
             ctx.session.state = null;
+            ctx.session.aiTestTopic = null;
         }
     }
     async handleAdminWritingTopics(ctx) {

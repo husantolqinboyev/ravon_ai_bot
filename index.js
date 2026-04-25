@@ -395,7 +395,10 @@ bot.on('text', async (ctx, next) => {
     }
 
     if (ctx.session?.state === 'waiting_for_ai_test_topic') {
-        return commandHandler.processAiTestGeneration(ctx);
+        return commandHandler.processAiTestTopicInput(ctx);
+    }
+    if (ctx.session?.state === 'waiting_for_ai_test_count') {
+        return commandHandler.processAiTestCountInput(ctx);
     }
 
     if (ctx.session?.state && (ctx.session.state === 'waiting_for_q_time' || ctx.session.state === 'waiting_for_q_points')) {

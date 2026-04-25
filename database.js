@@ -1682,7 +1682,7 @@ class Database {
 
     async getTopics(type = null) {
         try {
-            let query = this.supabase.from('topics').select('*').order('created_at', { ascending: false });
+            let query = this.supabaseAdmin.from('topics').select('*').order('created_at', { ascending: false });
             if (type) query = query.eq('type', type);
             const { data, error } = await query;
             if (error) throw error;
@@ -1739,7 +1739,7 @@ class Database {
 
     async getQuestions(topicId = null, limit = 50) {
         try {
-            let query = this.supabase.from('questions').select('*, topic:topics(title)');
+            let query = this.supabaseAdmin.from('questions').select('*, topic:topics(title)');
             if (topicId) query = query.eq('topic_id', topicId);
             const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
             if (error) throw error;
