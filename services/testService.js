@@ -50,6 +50,9 @@ class TestService {
         
         const timedOut = answerIndex === null || timeSpent > timeLimit;
         
+        let isCorrect = false;
+        let scoreEarned = 0;
+
         if (timedOut) {
             session.consecutiveTimeouts++;
         } else {

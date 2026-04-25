@@ -2812,6 +2812,8 @@ class CommandHandler {
 
         if (!session) return ctx.answerCbQuery('Seans topilmadi.');
 
+        await ctx.answerCbQuery().catch(() => {});
+
         // Clear timer
         if (session.timer) {
             clearTimeout(session.timer);
