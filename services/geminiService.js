@@ -8,7 +8,7 @@ class GeminiService {
             return;
         }
         this.apiKey = config.OPENROUTER_API_KEY;
-        this.modelName = config.OPENROUTER_MODEL || 'google/gemini-flash-1.5';
+        this.modelName = config.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
     }
 
     async analyzeAudio(audioBuffer, mimeType, type = 'general', targetText = null, retryCount = 0) {
