@@ -2764,10 +2764,10 @@ class CommandHandler {
         const progress = testService.getProgressBar(session.currentIndex + 1, session.questions.length);
         const timeLimit = question.time_limit || 12;
 
-        let msg = `❓ *Savol ${session.currentIndex + 1}/${session.questions.length}*\n\n`;
-        msg += `${question.question_text}\n\n`;
-        msg += `⏳ Vaqt: *${timeLimit} soniya*\n`;
-        msg += `💎 Ball: *${question.points || 1}*\n\n`;
+        let msg = `❓ <b>Savol ${session.currentIndex + 1}/${session.questions.length}</b>\n\n`;
+        msg += `${escapeHTML(question.question_text)}\n\n`;
+        msg += `⏳ Vaqt: <b>${timeLimit} soniya</b>\n`;
+        msg += `💎 Ball: <b>${question.points || 1}</b>\n\n`;
         msg += `${progress} ${Math.round(((session.currentIndex + 1) / session.questions.length) * 100)}%`;
 
         const buttons = question.options.map((opt, idx) => [Markup.button.callback(`${String.fromCharCode(65 + idx)}) ${opt}`, `test_ans_${idx}`)]);
@@ -2797,15 +2797,15 @@ class CommandHandler {
         if (ctx.callbackQuery) {
             if (question.image_url) {
                 await ctx.deleteMessage().catch(() => { });
-                await ctx.replyWithPhoto(question.image_url, { caption: msg, parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+                await ctx.replyWithPhoto(question.image_url, { caption: msg, parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
             } else {
-                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+                await ctx.editMessageText(msg, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
             }
         } else {
             if (question.image_url) {
-                await ctx.replyWithPhoto(question.image_url, { caption: msg, parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+                await ctx.replyWithPhoto(question.image_url, { caption: msg, parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
             } else {
-                await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+                await ctx.reply(msg, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
             }
         }
     }
@@ -2840,19 +2840,19 @@ class CommandHandler {
     async showTestResults(ctx, result) {
         const progress = testService.getProgressBar(result.total, result.total);
         let finalMsg = result.forceQuit
-            ? `⚠️ *Test to'xtatildi!*\nKetma-ket 4 marta javob bermaganingiz uchun test muddatdan oldin yakunlandi.\n\n`
-            : `🏁 *Test yakunlandi!*\n\n`;
+            ? `⚠️ <b>Test to'xtatildi!</b>\nKetma-ket 4 marta javob bermaganingiz uchun test muddatdan oldin yakunlandi.\n\n`
+            : `🏁 <b>Test yakunlandi!</b>\n\n`;
 
-        finalMsg += `📊 Umumiy ball: *${result.score}*\n`;
-        finalMsg += `📈 Natija: *${Math.round((result.score / (result.total * 1)) * 100)}%*\n\n`; // Simplified %
+        finalMsg += `📊 Umumiy ball: <b>${result.score}</b>\n`;
+        finalMsg += `📈 Natija: <b>${Math.round((result.score / (result.total * 1)) * 100)}%</b>\n\n`; // Simplified %
         finalMsg += `${progress} 100%`;
 
         if (ctx.callbackQuery && ctx.callbackQuery.message.photo) {
-            await ctx.editMessageCaption(finalMsg, { parse_mode: 'Markdown' });
+            await ctx.editMessageCaption(finalMsg, { parse_mode: 'HTML' });
         } else if (ctx.callbackQuery) {
-            await ctx.editMessageText(finalMsg, { parse_mode: 'Markdown' });
+            await ctx.editMessageText(finalMsg, { parse_mode: 'HTML' });
         } else {
-            await ctx.reply(finalMsg, { parse_mode: 'Markdown' });
+            await ctx.reply(finalMsg, { parse_mode: 'HTML' });
         }
         return ctx.answerCbQuery('Test yakunlandi!').catch(() => { });
     }
