@@ -2407,38 +2407,24 @@ class CommandHandler {
         try {
             const channels = await database.getRequiredChannels();
 
-            let msg = `📡 *Majburiy Obuna Kanallar*\n\n`;
-
-            const escapeMd = (text) => String(text).replace(/[_*`\[]/g, '\\$&');
-
-            const isFallback = channels.length > 0 && channels[0].is_fallback;
-            if (isFallback) {
-                msg += `⚠️ *DIQQAT:* Kanallar bazadan emas, \`config.js\` dan olinmoqda.\n`;
-                if (channels[0].error_msg) {
-                    msg += `❌ *Xatolik:* \`${escapeMd(channels[0].error_msg)}\`\n`;
-                    msg += `💡 *Yechim:* Iltimos, SQL skriptlarni (migratsiyalarni) Supabase-da bajaring.\n\n`;
-                }
-            }
+            let msg = `<b>📡 Majburiy Obuna Kanallar</b>\n\n`;
 
             if (channels.length === 0) {
                 msg += `❌ Hozircha hech qanday kanal qo'shilmagan.\n`;
             } else {
                 channels.forEach((ch, i) => {
-                    // Markdown belgilarni escape qilish (xatolik bermasligi uchun)
-                    const escapeMd = (text) => String(text).replace(/[_*`\[]/g, '\\$&');
-                    
-                    const name = escapeMd(ch.channel_name || ch.name || 'Nomsiz');
+                    const name = ch.channel_name || ch.name || 'Nomsiz';
                     const id = ch.channel_id || ch.id || '?';
                     const url = ch.channel_url || ch.url || '';
                     const isPrivate = ch.is_private ? '🔒 Maxfiy' : '📢 Ochiq';
                     
-                    msg += `${i + 1}. *${name}* (${isPrivate})\n`;
-                    msg += `   🆔 ID: \`${id}\`\n`;
+                    msg += `${i + 1}. <b>${name}</b> (${isPrivate})\n`;
+                    msg += `   🆔 ID: <code>${id}</code>\n`;
                     msg += `   🔗 ${url}\n\n`;
                 });
             }
 
-            msg += `\n📌 Kanal qo'shish uchun "+" tugmasini bosing.\n💡 *Maxfiy kanallar:* Bot unikal taklif havolalarini avtomatik yaratadi.`;
+            msg += `\n📌 Kanal qo'shish uchun "+" tugmasini bosing.\n💡 <b>Maxfiy kanallar:</b> Bot unikal taklif havolalarini avtomatik yaratadi.`;
 
             const buttons = [];
 
@@ -2457,21 +2443,21 @@ class CommandHandler {
             const keyboard = Markup.inlineKeyboard(buttons);
 
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...keyboard }).catch(async () => {
-                    await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
+                await ctx.editMessageText(msg, { parse_mode: 'HTML', ...keyboard }).catch(async () => {
+                    await ctx.reply(msg, { parse_mode: 'HTML', ...keyboard });
                 });
                 await ctx.answerCbQuery().catch(() => {});
             } else {
-                await ctx.reply(msg, { parse_mode: 'Markdown', ...keyboard });
+                await ctx.reply(msg, { parse_mode: 'HTML', ...keyboard });
             }
         } catch (error) {
             console.error('handleChannels error:', error);
-            const errMsg = `❌ *Xatolik yuz berdi:*\n\`${error.message || error}\`\n\nIltimos, bazaga ulanishni va jadval mavjudligini tekshiring.`;
+            const errMsg = `❌ <b>Xatolik yuz berdi:</b>\n<code>${error.message || error}</code>\n\nIltimos, bazaga ulanishni tekshiring.`;
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(errMsg, { parse_mode: 'Markdown' }).catch(() => {});
+                await ctx.editMessageText(errMsg, { parse_mode: 'HTML' }).catch(() => {});
                 await ctx.answerCbQuery('Xatolik!').catch(() => {});
             } else {
-                await ctx.reply(errMsg, { parse_mode: 'Markdown' });
+                await ctx.reply(errMsg, { parse_mode: 'HTML' });
             }
         }
     }
