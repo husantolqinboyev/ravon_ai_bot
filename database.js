@@ -1484,7 +1484,7 @@ class Database {
 
     async getRequiredChannels() {
         try {
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('required_channels')
                 .select('*')
                 .eq('is_active', true)
@@ -1515,7 +1515,7 @@ class Database {
         try {
             const isPrivate = channelUrl.includes('+') || channelUrl.includes('joinchat');
             
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('required_channels')
                 .upsert({
                     channel_id: String(channelId),
@@ -1537,7 +1537,7 @@ class Database {
 
     async removeRequiredChannel(channelId) {
         try {
-            const { error } = await this.supabase
+            const { error } = await this.supabaseAdmin
                 .from('required_channels')
                 .delete()
                 .eq('channel_id', String(channelId));
@@ -1552,7 +1552,7 @@ class Database {
 
     async updateUserChannelLinks(telegramId, channelLinks) {
         try {
-            const { error } = await this.supabase
+            const { error } = await this.supabaseAdmin
                 .from('users')
                 .update({ channel_links: channelLinks })
                 .eq('telegram_id', telegramId);
