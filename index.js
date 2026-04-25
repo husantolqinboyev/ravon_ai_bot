@@ -301,6 +301,7 @@ bot.action('admin_add_channel', (ctx) => commandHandler.handleAddChannel(ctx));
 bot.action(/remove_channel_(.+)/, (ctx) => commandHandler.handleRemoveChannel(ctx));
 bot.action('admin_ai_test_gen', (ctx) => commandHandler.handleAdminAiTestGeneration(ctx));
 bot.action('admin_writing_topics', (ctx) => commandHandler.handleAdminWritingTopics(ctx));
+bot.action('admin_add_writing_topic', (ctx) => commandHandler.handleAdminAddWritingTopic(ctx));
 bot.action('admin_test_mgmt', (ctx) => commandHandler.handleAdminTestManagement(ctx));
 bot.action(/admin_view_questions_(.+)/, (ctx) => commandHandler.handleAdminViewQuestions(ctx));
 bot.action(/admin_del_topic_conf_(.+)/, (ctx) => commandHandler.handleAdminDeleteTopicConfirm(ctx));
@@ -399,6 +400,9 @@ bot.on('text', async (ctx, next) => {
 
     if (ctx.session?.state === 'waiting_for_ai_test_topic') {
         return commandHandler.processAiTestTopicInput(ctx);
+    }
+    if (ctx.session?.state === 'waiting_for_writing_topic_info') {
+        return commandHandler.handleAdminAddWritingTopicProcess(ctx);
     }
     if (ctx.session?.state === 'waiting_for_ai_test_count') {
         return commandHandler.processAiTestCountInput(ctx);

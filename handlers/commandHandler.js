@@ -3115,6 +3115,65 @@ class CommandHandler {
             ctx.session.editingQId = null;
         }
     }
+
+    async handleAdminAddWritingTopic(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        ctx.session.state = 'waiting_for_writing_topic_info';
+        
+        const msg = `📝 *Yangi Writing Mavzusi Qo'shish*\n\n` +
+            `Iltimos, mavzu ma'lumotlarini quyidagi formatda yuboring:\n\n` +
+            `\`KATEGORIYA | SARLAVHA | TAVSIF\`\n\n` +
+            `*Misol:* \`IELTS Task 2 | Education | Technology in schools is becoming more common...\` \n\n` +
+            `Mavjud kategoriyalar: IELTS Task 1, IELTS Task 2, Business, Daily life\n\n` +
+            `Bekor qilish uchun /admin deb yozing.`;
+
+        await ctx.reply(msg, { parse_mode: 'Markdown' });
+        if (ctx.callbackQuery) await ctx.answerCbQuery();
+    }
+
+    async handleAdminAddWritingTopicProcess(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        const text = ctx.message.text;
+        if (text === '/admin' || text === '/cancel') {
+            ctx.session.state = null;
+            return this.handleAdmin(ctx);
+        }
+
+        const parts = text.split('|').map(p => p.trim());
+        if (parts.length < 2) {
+            return ctx.reply("❌ Format noto'g'ri. Kamida Kategoriya va Sarlavha bo'lishi shart.\n\nMisol: `IELTS Task 2 | Education | ...`", { parse_mode: 'Markdown' });
+        }
+
+        const category = parts[0];
+        const title = parts[1];
+        const description = parts[2] || '';
+
+        try {
+            await database.addTopic({
+                type: 'writing',
+                category: category,
+                title: title,
+                description: description,
+                difficulty: 'medium' // Default difficulty
+            });
+
+            ctx.session.state = null;
+            await ctx.reply(`✅ Yangi writing mavzusi muvaffaqiyatli qo'shildi!\n\n📂 Kategoriya: *${category}*\n📝 Sarlavha: *${title}*`, { 
+                parse_mode: 'Markdown',
+                ...this.adminMenu 
+            });
+            
+            // Refresh topics list
+            return this.handleAdminWritingTopics(ctx);
+        } catch (error) {
+            console.error('Error adding writing topic:', error);
+            await ctx.reply('❌ Mavzu qo\'shishda xatolik yuz berdi.');
+        }
+    }
 }
 
 module.exports = new CommandHandler();
