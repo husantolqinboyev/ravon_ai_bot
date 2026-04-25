@@ -145,7 +145,7 @@ class Database {
         }
 
         try {
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('users')
                 .select('is_admin')
                 .eq('telegram_id', telegramId)
@@ -168,7 +168,7 @@ class Database {
         if (adminStatus) return true;
 
         try {
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('users')
                 .select('is_teacher')
                 .eq('telegram_id', telegramId)
@@ -230,7 +230,7 @@ class Database {
 
     async checkLimit(telegramId, type = 'general') {
         try {
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('users')
                 .select('used_today, daily_limit, bonus_limit, last_active, writing_used_today, writing_limit, test_used_today, test_limit')
                 .eq('telegram_id', telegramId)
@@ -247,7 +247,7 @@ class Database {
 
             // If last active was not today, reset used_today
             if (lastActive.toDateString() !== today.toDateString()) {
-                await this.supabase
+                await this.supabaseAdmin
                     .from('users')
                     .update({ 
                         used_today: 0, 
@@ -277,7 +277,7 @@ class Database {
 
     async incrementUsage(telegramId, type = 'general') {
         try {
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('users')
                 .select('used_today, daily_limit, bonus_limit, writing_used_today, writing_limit, test_used_today, test_limit')
                 .eq('telegram_id', telegramId)
@@ -303,7 +303,7 @@ class Database {
                 }
             }
 
-            await this.supabase
+            await this.supabaseAdmin
                 .from('users')
                 .update(updateData)
                 .eq('telegram_id', telegramId);
@@ -530,7 +530,7 @@ class Database {
 
     async getUserByTelegramId(telegramId) {
         try {
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('users')
                 .select('*')
                 .eq('telegram_id', telegramId)
@@ -550,7 +550,7 @@ class Database {
     async saveUser(userData, referrerId = null) {
         try {
             // Check if user exists
-            const { data: existingUser, error: fetchError } = await this.supabase
+            const { data: existingUser, error: fetchError } = await this.supabaseAdmin
                 .from('users')
                 .select('id, referred_by')
                 .eq('telegram_id', userData.id)
@@ -562,7 +562,7 @@ class Database {
 
             if (existingUser) {
                 // Update existing user
-                const { error } = await this.supabase
+                const { error } = await this.supabaseAdmin
                     .from('users')
                     .update({
                         username: userData.username,
@@ -577,7 +577,7 @@ class Database {
                 return existingUser.id;
             } else {
                 // Insert new user
-                const { data, error } = await this.supabase
+                const { data, error } = await this.supabaseAdmin
                     .from('users')
                     .insert({
                         telegram_id: userData.id,
@@ -958,7 +958,7 @@ class Database {
 
     async saveAssessment(userId, assessmentData) {
         try {
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('assessments')
                 .insert({
                     user_id: userId,
@@ -1030,7 +1030,7 @@ class Database {
                 };
             }
 
-            const { data, error } = await this.supabase
+            const { data, error } = await this.supabaseAdmin
                 .from('assessments')
                 .select('overall_score, accuracy_score, fluency_score')
                 .eq('user_id', user.id);
@@ -1070,7 +1070,7 @@ class Database {
 
     async logApiUsage(modelName, promptTokens, candidatesTokens, totalTokens, requestType = 'assessment') {
         try {
-            const { error } = await this.supabase
+            const { error } = await this.supabaseAdmin
                 .from('api_usage')
                 .insert({
                     model_name: modelName,
@@ -1752,7 +1752,7 @@ class Database {
 
     async getRandomQuestions(limit = 20, topicId = null) {
         try {
-            let query = this.supabase.from('questions').select('*');
+            let query = this.supabaseAdmin.from('questions').select('*');
             if (topicId) query = query.eq('topic_id', topicId);
             
             const { data, error } = await query;
