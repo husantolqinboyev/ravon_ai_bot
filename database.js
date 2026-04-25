@@ -1511,9 +1511,11 @@ class Database {
         }
     }
 
-    async addRequiredChannel(channelId, channelUrl, channelName) {
+    async addRequiredChannel(channelId, channelUrl = '', channelName = 'Kanal', isPrivate = false) {
         try {
-            const isPrivate = channelUrl.includes('+') || channelUrl.includes('joinchat');
+            if (!isPrivate && channelUrl) {
+                isPrivate = channelUrl.includes('+') || channelUrl.includes('joinchat');
+            }
             
             const { data, error } = await this.supabaseAdmin
                 .from('required_channels')

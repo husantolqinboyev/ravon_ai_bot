@@ -2469,22 +2469,20 @@ class CommandHandler {
         ctx.session = ctx.session || {};
         ctx.session.state = 'waiting_for_channel_id';
 
-        const msg = `➕ *Yangi kanal qo'shish*\n\n` +
-            `📋 *Ko'rsatmalar:*\n` +
-            `1️⃣ Avval botni kanalga admin sifatida qo'shing\n` +
-            `2️⃣ Keyin kanal ma'lumotlarini quyidagi formatda yuboring:\n\n` +
-            `\`kanal_id | kanal_nomi | kanal_url\`\n\n` +
-            `📌 *Misol:*\n` +
-            `\`-1001234567890 | English Channel | https://t.me/english_channel\`\n\n` +
-            `⚠️ *Maxfiy kanallar:* Agar kanal url-manzili \`https://t.me/+\` bilan boshlansa, bot uni maxfiy deb hisoblaydi va har bir foydalanuvchi uchun unikal link yaratadi.\n\n` +
-            `⚠️ Bot kanalda *admin* bo'lishi shart!\n\n` +
+        const msg = `➕ <b>Yangi kanal qo'shish</b>\n\n` +
+            `📋 <b>Ko'rsatmalar:</b>\n` +
+            `1️⃣ Avval botni kanalga <b>admin</b> sifatida qo'shing\n` +
+            `2️⃣ Keyin kanal <b>ID raqamini</b> yuboring yoki kanaldan biror xabarni shu yerga <b>forward</b> qiling.\n\n` +
+            `📌 <i>ID raqami odatda -100 bilan boshlanadi.</i>\n\n` +
             `❌ Bekor qilish uchun /admin yozing.`;
 
         if (ctx.callbackQuery) {
             await ctx.answerCbQuery().catch(() => {});
-            await ctx.reply(msg, { parse_mode: 'Markdown' });
+            await ctx.editMessageText(msg, { parse_mode: 'HTML' }).catch(async () => {
+                await ctx.reply(msg, { parse_mode: 'HTML' });
+            });
         } else {
-            await ctx.reply(msg, { parse_mode: 'Markdown' });
+            await ctx.reply(msg, { parse_mode: 'HTML' });
         }
     }
 
@@ -2492,110 +2490,58 @@ class CommandHandler {
         const isAdmin = await database.isAdmin(ctx.from.id);
         if (!isAdmin) return;
 
-        const text = ctx.message.text.trim();
+        let channelId;
+        
+        // Forward qilingan xabardan ID olish
+        if (ctx.message.forward_from_chat) {
+            channelId = ctx.message.forward_from_chat.id;
+        } else {
+            const text = ctx.message.text ? ctx.message.text.trim() : '';
+            
+            // Bekor qilish
+            if (text === '/admin' || text === '/start') {
+                ctx.session.state = null;
+                return this.handleAdmin(ctx);
+            }
 
-        // Bekor qilish
-        if (text === '/admin' || text === '/start') {
-            ctx.session.state = null;
-            return this.handleAdmin(ctx);
+            // Faqat ID kiritilgan bo'lsa
+            if (text.startsWith('-100') || !isNaN(text)) {
+                channelId = text;
+            } else {
+                return ctx.reply("❌ Iltimos, kanal ID raqamini yuboring (masalan: -100...) yoki xabarni forward qiling.");
+            }
         }
-
-        // Format: channel_id | channel_name | channel_url
-        const parts = text.split('|').map(s => s.trim());
-        if (parts.length < 3) {
-            return ctx.reply(
-                `❌ *Format noto'g'ri!*\n\n` +
-                `To'g'ri format:\n` +
-                `\`kanal_id | kanal_nomi | kanal_url\`\n\n` +
-                `Misol:\n` +
-                `\`-1001234567890 | English Channel | https://t.me/english_channel\``,
-                { parse_mode: 'Markdown' }
-            );
-        }
-
-        const [channelId, channelName, channelUrl] = parts;
-
-        // Channel ID tekshiruvi
-        if (isNaN(channelId)) {
-            return ctx.reply(
-                `❌ Kanal ID noto'g'ri. ID faqat raqamlardan iborat bo'lishi kerak.\n` +
-                `Misol: \`-1001234567890\``,
-                { parse_mode: 'Markdown' }
-            );
-        }
-
-        await ctx.reply('⏳ Kanal tekshirilmoqda...');
 
         try {
-            // Bot kanalda admin ekanligini tekshirish
-            let botMember;
-            try {
-                const botInfo = await ctx.telegram.getMe();
-                botMember = await ctx.telegram.getChatMember(channelId, botInfo.id);
-            } catch (e) {
-                ctx.session.state = null;
-                return ctx.reply(
-                    `❌ *Kanal topilmadi yoki botga ruxsat yo'q!*\n\n` +
-                    `Iltimos:\n` +
-                    `1️⃣ Bot kanalga admin sifatida qo'shilganini tekshiring\n` +
-                    `2️⃣ Kanal ID to'g'riligini tekshiring: \`${channelId}\``,
-                    { parse_mode: 'Markdown' }
-                );
+            await ctx.reply('⏳ Kanal tekshirilmoqda...');
+            
+            // Kanal ma'lumotlarini Telegramdan olish
+            const chat = await ctx.telegram.getChat(channelId);
+            
+            if (chat.type !== 'channel') {
+                return ctx.reply("❌ Bu kanal emas! Iltimos, faqat kanal qo'shing.");
             }
 
-            const isAdmin = ['administrator', 'creator'].includes(botMember?.status);
+            const channelName = chat.title;
+            const channelUrl = chat.username ? `https://t.me/${chat.username}` : '';
+            const isPrivate = !chat.username;
 
-            if (!isAdmin) {
-                ctx.session.state = null;
-                return ctx.reply(
-                    `⚠️ *Bot kanalda admin emas!*\n\n` +
-                    `Kanal: *${channelName}*\n` +
-                    `Bot holati: \`${botMember?.status || 'nomaʼlum'}\`\n\n` +
-                    `📌 *Iltimos:*\n` +
-                    `1️⃣ Kanalingizga o'ting\n` +
-                    `2️⃣ Kanal sozlamalarida botni *Admin* qiling\n` +
-                    `3️⃣ Keyin qaytadan urinib ko'ring`,
-                    { parse_mode: 'Markdown' }
-                );
-            }
-
-            // Kanal ma'lumotlarini olish
-            let chatInfo;
-            try {
-                chatInfo = await ctx.telegram.getChat(channelId);
-            } catch (e) {
-                chatInfo = null;
-            }
-
-            const finalName = channelName || chatInfo?.title || 'Kanal';
-            const finalUrl = channelUrl || (chatInfo?.username ? `https://t.me/${chatInfo.username}` : '');
-
-            // DB ga saqlash
-            await database.addRequiredChannel(channelId, finalUrl, finalName);
+            await database.addRequiredChannel(channelId, channelUrl, channelName, isPrivate);
 
             ctx.session.state = null;
-
-            const isPrivate = finalUrl.includes('+') || finalUrl.includes('joinchat');
-
-            await ctx.reply(
-                `✅ *Kanal muvaffaqiyatli qo'shildi!*\n\n` +
-                `📢 Kanal: *${finalName}*\n` +
-                `🆔 ID: \`${channelId}\`\n` +
-                `🔗 URL: ${finalUrl}\n` +
-                `🔒 Turi: ${isPrivate ? 'Maxfiy' : 'Ochiq'}\n\n` +
-                `Endi foydalanuvchilar botdan foydalanish uchun ushbu kanalga a'zo bo'lishlari kerak.`,
-                { parse_mode: 'Markdown' }
-            );
-
-            // Kanallar ro'yxatini ko'rsatish
+            await ctx.reply(`✅ <b>Kanal muvaffaqiyatli qo'shildi!</b>\n\n📢 Nomi: <b>${channelName}</b>\n🆔 ID: <code>${channelId}</code>\n👤 Turi: ${isPrivate ? '🔒 Maxfiy' : '📢 Ochiq'}`, { parse_mode: 'HTML' });
+            
             return this.handleChannels(ctx);
 
         } catch (error) {
             console.error('handleAddChannelProcess error:', error);
-            ctx.session.state = null;
-            await ctx.reply(
-                `❌ Kanal qo'shishda xatolik yuz berdi: ${error.message}\n\nQaytadan urinib ko'ring.`
-            );
+            let errorMsg = "❌ Kanalni qo'shib bo'lmadi.";
+            if (error.message.includes('chat not found')) {
+                errorMsg += "\n\n⚠️ <b>Bot bu kanalga admin qilib qo'shilmagan!</b>\nIltimos, avval botni kanalga qo'shib, keyin ID yuboring.";
+            } else {
+                errorMsg += `\nXatolik: ${error.message}`;
+            }
+            await ctx.reply(errorMsg, { parse_mode: 'HTML' });
         }
     }
 
