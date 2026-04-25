@@ -246,43 +246,87 @@
         <!-- VIEW: ANALYZE -->
         <div id="view-analyze" class="view active">
             <h2 style="font-size: 22px;">🎙️ Nutq Tahlili</h2>
-            <p class="subtitle" style="margin-bottom: 24px;">Talaffuzingizni baholash uchun audio faylni yuklang.</p>
+            <p class="subtitle" style="margin-bottom: 24px;">Talaffuzingizni qanday usulda tahlil qilmoqchisiz?</p>
 
-            <div class="card">
-                <div style="background: var(--secondary-bg); padding: 20px; border-radius: var(--radius-md); margin-bottom: 20px; border-left: 5px solid var(--primary); box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
-                    <div class="score-label" style="margin-bottom: 8px;">Mashq uchun matn:</div>
-                    <div id="practice-text" style="font-size: 17px; font-weight: 500; line-height: 1.5; color: var(--text-main);">
-                        "The quick brown fox jumps over the lazy dog."
-                    </div>
-                </div>
-                
-                <div class="record-btn-container">
-                    <button id="btn-record" class="record-btn">
-                        <span id="record-icon">🎤</span>
-                    </button>
-                    <div id="record-timer" class="record-timer hidden">00:00</div>
-                    <p id="record-hint" class="subtitle">Yozishni boshlash uchun bosing</p>
-                </div>
-                
-                <div id="analyze-status" class="hidden" style="margin-top: 10px; text-align: center;">
-                    <center><div class="loader" style="border-top-color: var(--primary);"></div></center>
-                    <p class="subtitle" style="margin-top: 10px; font-weight: 600;">AI tahlil qilmoqda... iltimos kuting</p>
-                </div>
-
-                <div id="result-display" class="hidden" style="margin-top: 24px; animation: slideIn 0.5s;">
-                    <div class="score-box">
-                        <div class="score-pill">
-                            <span class="score-label">Umumiy ball</span>
-                            <span id="score-total" class="score-val">0</span>
-                        </div>
-                        <div class="score-pill">
-                            <span class="score-label">Aniqlik</span>
-                            <span id="score-accuracy" class="score-val">0%</span>
+            <!-- Choice Screen -->
+            <div id="analyze-choice-screen">
+                <div class="card" onclick="setupAnalyzeMode('self')" style="cursor: pointer; border-left: 5px solid var(--primary); transition: transform 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span style="font-size: 32px;">✍️</span>
+                        <div>
+                            <h3 style="margin: 0; font-size: 18px;">Matnni o'zim yozaman</h3>
+                            <p class="subtitle" style="margin: 4px 0 0 0;">Ixtiyoriy matn yoki so'z kiriting</p>
                         </div>
                     </div>
-                    <div class="card" style="padding: 16px; background: var(--secondary-bg); border: none; margin-bottom: 0;">
-                        <span class="score-label">Fikr va tavsiyalar:</span>
-                        <p id="feedback-content" style="font-size: 14px; line-height: 1.7; margin-top: 8px; color: var(--text-main); font-weight: 500;"></p>
+                </div>
+
+                <div class="card" onclick="showRandomChoice()" style="cursor: pointer; border-left: 5px solid var(--success); transition: transform 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span style="font-size: 32px;">🎲</span>
+                        <div>
+                            <h3 style="margin: 0; font-size: 18px;">Tasodifiy topshiriq</h3>
+                            <p class="subtitle" style="margin: 4px 0 0 0;">Bot sizga topshiriq tanlab beradi</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Random Type Selection (Initially Hidden) -->
+                <div id="random-type-selection" class="hidden" style="animation: slideIn 0.3s ease-out;">
+                    <p class="subtitle" style="text-align: center; margin-bottom: 15px; font-weight: 700;">Topshiriq turini tanlang:</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="setupAnalyzeMode('random', 'word')" style="border: 1px solid var(--success); color: var(--success);">🔤 So'z</button>
+                        <button class="btn btn-secondary" onclick="setupAnalyzeMode('random', 'text')" style="border: 1px solid var(--success); color: var(--success);">📝 Matn</button>
+                    </div>
+                    <button class="btn btn-secondary" onclick="hideRandomChoice()" style="margin-top: 15px; font-size: 12px; height: 40px; opacity: 0.7;">🔙 Orqaga</button>
+                </div>
+            </div>
+
+            <!-- Main Analyze Screen (Initially Hidden) -->
+            <div id="analyze-main-screen" class="hidden">
+                <div class="card">
+                    <button onclick="resetAnalyzeMode()" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-secondary);">✖️</button>
+                    
+                    <div id="self-input-container" class="hidden">
+                        <div class="score-label" style="margin-bottom: 8px;">Matnni kiriting:</div>
+                        <textarea id="custom-practice-text" placeholder="Bu yerga inglizcha matn yoki so'z yozing..." style="height: 100px; margin-bottom: 12px;"></textarea>
+                    </div>
+
+                    <div id="practice-display" class="hidden">
+                        <div style="background: var(--secondary-bg); padding: 20px; border-radius: var(--radius-md); margin-bottom: 20px; border-left: 5px solid var(--primary); box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
+                            <div class="score-label" style="margin-bottom: 8px;">Topshiriq matni:</div>
+                            <div id="practice-text" style="font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--text-main);">...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="record-btn-container">
+                        <button id="btn-record" class="record-btn">
+                            <span id="record-icon">🎤</span>
+                        </button>
+                        <div id="record-timer" class="record-timer hidden">00:00</div>
+                        <p id="record-hint" class="subtitle">Yozishni boshlash uchun bosing</p>
+                    </div>
+                    
+                    <div id="analyze-status" class="hidden" style="margin-top: 10px; text-align: center;">
+                        <center><div class="loader" style="border-top-color: var(--primary);"></div></center>
+                        <p class="subtitle" style="margin-top: 10px; font-weight: 600;">AI tahlil qilmoqda... kuting</p>
+                    </div>
+
+                    <div id="result-display" class="hidden" style="margin-top: 24px; animation: slideIn 0.5s;">
+                        <div class="score-box">
+                            <div class="score-pill">
+                                <span class="score-label">Umumiy ball</span>
+                                <span id="score-total" class="score-val">0</span>
+                            </div>
+                            <div class="score-pill">
+                                <span class="score-label">Aniqlik</span>
+                                <span id="score-accuracy" class="score-val">0%</span>
+                            </div>
+                        </div>
+                        <div class="card" style="padding: 16px; background: var(--secondary-bg); border: none; margin-bottom: 0;">
+                            <span class="score-label">AI fikri:</span>
+                            <p id="feedback-content" style="font-size: 14px; line-height: 1.7; margin-top: 8px; color: var(--text-main); font-weight: 500;"></p>
+                        </div>
+                        <button onclick="resetAnalyzeMode()" class="btn btn-primary" style="margin-top: 15px;">Yangi topshiriq</button>
                     </div>
                 </div>
             </div>
@@ -568,7 +612,52 @@
             tg.HapticFeedback.selectionChanged();
         };
 
-        // EVENT HANDLERS
+        // Analyze Logic & Navigation
+        window.showRandomChoice = () => {
+            document.getElementById('random-type-selection').classList.remove('hidden');
+            tg.HapticFeedback.impactOccurred('light');
+        };
+
+        window.hideRandomChoice = () => {
+            document.getElementById('random-type-selection').classList.add('hidden');
+        };
+
+        window.setupAnalyzeMode = async (mode, type = 'word') => {
+            const choiceScreen = document.getElementById('analyze-choice-screen');
+            const mainScreen = document.getElementById('analyze-main-screen');
+            const selfInput = document.getElementById('self-input-container');
+            const practiceDisplay = document.getElementById('practice-display');
+            const practiceText = document.getElementById('practice-text');
+
+            choiceScreen.classList.add('hidden');
+            mainScreen.classList.remove('hidden');
+            resultDisplay.classList.add('hidden');
+
+            if (mode === 'self') {
+                selfInput.classList.remove('hidden');
+                practiceDisplay.classList.add('hidden');
+            } else {
+                selfInput.classList.add('hidden');
+                practiceDisplay.classList.remove('hidden');
+                practiceText.innerText = 'Yuklanmoqda...';
+                
+                try {
+                    const data = await fetchAPI(`/random-word?type=${type}`);
+                    practiceText.innerText = data.word || data.content || 'Xatolik yuz berdi';
+                } catch (err) {
+                    practiceText.innerText = 'Topshiriqni yuklab bo\'lmadi';
+                }
+            }
+            tg.HapticFeedback.selectionChanged();
+        };
+
+        window.resetAnalyzeMode = () => {
+            document.getElementById('analyze-choice-screen').classList.remove('hidden');
+            document.getElementById('analyze-main-screen').classList.add('hidden');
+            document.getElementById('random-type-selection').classList.add('hidden');
+            document.getElementById('custom-practice-text').value = '';
+            resultDisplay.classList.add('hidden');
+        };
 
         // Analyze logic with Voice Recording
         const btnRecord = document.getElementById('btn-record');
@@ -596,6 +685,15 @@
         }
 
         async function startRecording() {
+            const selfInput = document.getElementById('self-input-container');
+            const customText = document.getElementById('custom-practice-text').value.trim();
+            const practiceText = document.getElementById('practice-text').innerText;
+
+            // Matn kiritilganligini tekshirish (faqat "self" rejimida)
+            if (!selfInput.classList.contains('hidden') && !customText) {
+                return tg.showAlert('Iltimos, avval matnni kiriting');
+            }
+
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(stream);
@@ -607,7 +705,10 @@
 
                 mediaRecorder.onstop = async () => {
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    sendAudio(audioBlob);
+                    
+                    // Qaysi matnni tahlil qilishni aniqlash
+                    const textToAnalyze = !selfInput.classList.contains('hidden') ? customText : practiceText;
+                    sendAudio(audioBlob, textToAnalyze);
                     
                     // Stop all tracks to release microphone
                     stream.getTracks().forEach(track => track.stop());
@@ -640,7 +741,7 @@
             }
         }
 
-        async function sendAudio(blob) {
+        async function sendAudio(blob, referenceText) {
             btnRecord.disabled = true;
             analyzeStatus.classList.remove('hidden');
             resultDisplay.classList.add('hidden');
@@ -648,7 +749,7 @@
             try {
                 const form = new FormData();
                 form.append('audio', blob, 'recording.webm');
-                form.append('reference_text', document.getElementById('practice-text').innerText);
+                form.append('reference_text', referenceText);
                 
                 const res = await fetchAPI('/analyze-audio', 'post', form);
                 if (res.success) {
