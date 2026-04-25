@@ -1491,54 +1491,37 @@ class Database {
                 .order('created_at', { ascending: true });
 
             if (error) {
-                // Jadval mavjud bo'lmasa, config.js dan qaytaramiz
-                if (error.code === '42P01') {
-                    console.warn('required_channels jadval topilmadi, config.js dan foydalanilmoqda');
-                    return config.REQUIRED_CHANNELS.map(ch => ({
-                        channel_id: ch.id,
-                        channel_url: ch.url,
-                        channel_name: ch.name,
-                        is_private: false,
-                        invite_link: ''
-                    }));
-                }
-                throw error;
+                console.error('Database query error:', error.message);
+                return [];
             }
 
             if (!data || data.length === 0) {
-                // DB bo'sh bo'lsa, config.js dan qaytaramiz
-                return config.REQUIRED_CHANNELS.map(ch => ({
-                    channel_id: ch.id,
-                    channel_url: ch.url,
-                    channel_name: ch.name,
-                    is_private: false,
-                    invite_link: ''
-                }));
+                return [];
             }
 
-            return data;
-        } catch (error) {
-            console.error('Error getting required channels:', error);
-            // Xato bo'lsa config.js dan fallback
-            return config.REQUIRED_CHANNELS.map(ch => ({
-                channel_id: ch.id,
-                channel_url: ch.url,
-                channel_name: ch.name,
-                is_private: false,
-                invite_link: ''
+            // Ensure all required fields exist even if not in DB
+            return data.map(ch => ({
+                ...ch,
+                is_private: ch.is_private || (ch.channel_url && (ch.channel_url.includes('+') || ch.channel_url.includes('joinchat'))) || false,
+                invite_link: ch.invite_link || ''
             }));
+        } catch (error) {
+            console.error('CRITICAL: Error getting required channels:', error);
+            return [];
         }
     }
 
     async addRequiredChannel(channelId, channelUrl, channelName) {
         try {
+            const isPrivate = channelUrl.includes('+') || channelUrl.includes('joinchat');
+            
             const { data, error } = await this.supabase
                 .from('required_channels')
                 .upsert({
                     channel_id: String(channelId),
                     channel_url: channelUrl,
                     channel_name: channelName,
-                    is_private: channelUrl.includes('+') || channelUrl.includes('joinchat'), // Simple detection
+                    is_private: isPrivate,
                     is_active: true
                 }, { onConflict: 'channel_id' })
                 .select()

@@ -18,12 +18,10 @@ module.exports = {
     ADMIN_IDS: process.env.ADMIN_ID ? process.env.ADMIN_ID.split(',').map(id => id.trim()) : [],
 
     // Channel Subscription Check (multiple required channels)
-    REQUIRED_CHANNELS: [
-        { id: '-1003014655042', url: 'https://t.me/englishwithmuazzama', name: 'ENGLISH with Muazzama ( C1 Level)📚' },
-    ],
+    REQUIRED_CHANNELS: [],
     // Legacy (birinchi kanal — backward compatibility)
-    REQUIRED_CHANNEL_ID: '-1003014655042',
-    CHANNEL_URL: 'https://t.me/englishwithmuazzama',
+    REQUIRED_CHANNEL_ID: '',
+    CHANNEL_URL: '',
 
     // Admin Contact
     ADMIN_USERNAME: '@khamidovsanat',

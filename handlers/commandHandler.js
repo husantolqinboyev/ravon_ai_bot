@@ -2409,6 +2409,15 @@ class CommandHandler {
 
             let msg = `📡 *Majburiy Obuna Kanallar*\n\n`;
 
+            const isFallback = channels.length > 0 && channels[0].is_fallback;
+            if (isFallback) {
+                msg += `⚠️ *DIQQAT:* Kanallar bazadan emas, \`config.js\` dan olinmoqda.\n`;
+                if (channels[0].error_msg) {
+                    msg += `❌ *Xatolik:* \`${channels[0].error_msg}\`\n`;
+                    msg += `💡 *Yechim:* Iltimos, SQL skriptlarni (migratsiyalarni) Supabase-da bajaring.\n\n`;
+                }
+            }
+
             if (channels.length === 0) {
                 msg += `❌ Hozircha hech qanday kanal qo'shilmagan.\n`;
             } else {
