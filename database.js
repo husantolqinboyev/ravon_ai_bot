@@ -1492,7 +1492,7 @@ class Database {
 
             if (error) {
                 console.error('Database query error:', error.message);
-                return [];
+                throw error; // Throw to catch in commandHandler
             }
 
             if (!data || data.length === 0) {
@@ -1507,7 +1507,7 @@ class Database {
             }));
         } catch (error) {
             console.error('CRITICAL: Error getting required channels:', error);
-            return [];
+            throw error; // Throw to catch in commandHandler
         }
     }
 

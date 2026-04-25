@@ -2461,11 +2461,12 @@ class CommandHandler {
             }
         } catch (error) {
             console.error('handleChannels error:', error);
-            const errMsg = `Xatolik: ${error.message || 'Kanallar ro\'yxatini olishda xatolik yuz berdi.'}`;
+            const errMsg = `❌ *Xatolik yuz berdi:*\n\`${error.message || error}\`\n\nIltimos, bazaga ulanishni va jadval mavjudligini tekshiring.`;
             if (ctx.callbackQuery) {
-                await ctx.answerCbQuery(errMsg, { show_alert: true }).catch(() => {});
+                await ctx.editMessageText(errMsg, { parse_mode: 'Markdown' }).catch(() => {});
+                await ctx.answerCbQuery('Xatolik!').catch(() => {});
             } else {
-                await ctx.reply(errMsg);
+                await ctx.reply(errMsg, { parse_mode: 'Markdown' });
             }
         }
     }
