@@ -233,6 +233,154 @@ class GeminiService {
             throw new Error(`AI matn yaratishda xatolik: ${error.message}`);
         }
     }
+    async analyzeWriting(text, topic = null, imageData = null) {
+        try {
+            const topicContext = topic ? `Topic: ${topic.title}\nDescription: ${topic.description}` : "General writing analysis";
+            
+            const prompt = `
+                Analyze the following English writing task. 
+                ${topicContext}
+                
+                ${imageData ? "I have provided an image of a handwritten note. Please recognize the text first and then analyze it." : `Writing Content: "${text}"`}
+                
+                Provide detailed feedback in UZBEK. 
+                Focus on these aspects:
+                1. Matnni aniqlash (OCR): Agar rasm bo'lsa, matnni aniqlik bilan o'qing.
+                2. Grammar & Spelling: Har bir xatoni toping, UZBEK tilida tushuntiring va to'g'ri variantni bering.
+                3. Vocabulary: Ballni oshirish uchun sinonimlar taklif qiling.
+                4. Cohesion: Gaplar bog'liqligini tahlil qiling.
+                5. Originality: Matn AI tomonidan yaratilgan yoki internetdan ko'chirilganligini tekshiring.
+                
+                Return ONLY a valid JSON object with this structure:
+                {
+                    "isOriginal": boolean,
+                    "extractedText": "string (the text you recognized from image)",
+                    "overallScore": number (0-100),
+                    "grammarScore": number,
+                    "vocabularyScore": number,
+                    "cohesionScore": number,
+                    "feedback": {
+                        "grammar": [{"error": "string", "correction": "string", "explanation": "string"}],
+                        "vocabulary": {"feedback": "string", "suggestions": [{"original": "string", "better": "string", "reason": "string"}]},
+                        "cohesion": "string",
+                        "generalAdvice": ["string"]
+                    },
+                    "formattedFeedback": "Markdown string with results."
+                }
+            `;
+
+            const content = [
+                { type: "text", text: prompt.trim() }
+            ];
+
+            if (imageData) {
+                content.push({
+                    type: "image_url",
+                    image_url: {
+                        url: `data:image/jpeg;base64,${imageData}`
+                    }
+                });
+            } else if (text) {
+                content.push({
+                    type: "text",
+                    text: `Content: ${text}`
+                });
+            }
+
+            const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                model: "google/gemini-pro-1.5-exp",
+                messages: [
+                    {
+                        role: "user",
+                        content: content
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 2500
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'HTTP-Referer': 'https://github.com/ravon-ai',
+                    'X-Title': 'Ravon AI Bot',
+                    'Content-Type': 'application/json'
+                },
+                timeout: 60000
+            });
+
+            const responseContent = response.data.choices[0].message.content;
+            let data;
+            try {
+                data = JSON.parse(responseContent);
+            } catch (e) {
+                const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+                data = JSON.parse(jsonMatch[0]);
+            }
+            return data;
+        } catch (error) {
+            console.error("Writing analysis error:", error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    async generateAiTests(topicName, count = 5) {
+        try {
+            const prompt = `
+                Generate ${count} multiple choice questions (MCQ) for English learning.
+                Topic: ${topicName}
+                
+                Requirements:
+                - Each question must have 4 options (A, B, C, D).
+                - Only ONE correct answer.
+                - Difficulty should be appropriate for the topic.
+                - Assign a "time_limit" in seconds (e.g. 20, 30, 45) based on difficulty.
+                - Assign "points" (e.g. 1, 2, 5) based on difficulty.
+                - Return ONLY a JSON array of objects:
+                [
+                    {
+                        "question_text": "string",
+                        "options": ["A", "B", "C", "D"],
+                        "correct_option": number (0-3),
+                        "time_limit": number,
+                        "points": number,
+                        "tags": ["tag1", "tag2"]
+                    }
+                ]
+            `;
+
+            const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                model: this.modelName,
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt.trim()
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 2000
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'HTTP-Referer': 'https://github.com/ravon-ai',
+                    'X-Title': 'Ravon AI Bot',
+                    'Content-Type': 'application/json'
+                },
+                timeout: 60000
+            });
+
+            const content = response.data.choices[0].message.content;
+            let data;
+            try {
+                data = JSON.parse(content);
+            } catch (e) {
+                const jsonMatch = content.match(/\[[\s\S]*\]/);
+                data = JSON.parse(jsonMatch[0]);
+            }
+            return data;
+        } catch (error) {
+            console.error("AI test generation error:", error.message);
+            throw error;
+        }
+    }
 }
 
 module.exports = new GeminiService();

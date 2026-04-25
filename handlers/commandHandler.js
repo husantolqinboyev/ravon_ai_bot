@@ -5,6 +5,7 @@ const assessmentService = require('../services/assessmentService');
 const pdfService = require('../services/pdfService');
 const ttsService = require('../services/ttsService');
 const geminiService = require('../services/geminiService');
+const testService = require('../services/testService');
 const database = require('../database');
 const config = require('../config');
 
@@ -12,19 +13,19 @@ class CommandHandler {
     constructor() {
         this.mainMenu = Markup.keyboard([
             [Markup.button.webApp('🚀 Ravon AI Mini App', config.APP_URL)],
-            ['🎙 Talaffuzni tekshirish', '🔊 Matnni ovozga aylantirish'],
-            ['👤 Profil', '💳 Tariflar | Ko\'proq foyda olish'],
-            ['❓ Bot qanday ishlaydi?']
+            ['🎙 Talaffuz', '📝 Writing (Beta)'],
+            ['✍️ Test topshirish (Beta)', '🔊 Matn → Ovoz'],
+            ['👤 Profil', '💳 Tariflar'],
+            ['❓ Yordam']
         ]).resize();
 
         this.adminMenu = Markup.keyboard([
-            ['👥 Foydalanuvchilar', '➕ Matn qo\'shish'],
-            ['🤖 AI matn yaratish', '🤖 AI so\'z yaratish'],
-            ['📚 Matnlar ro\'yxati', '📋 Oxirgi natijalar'],
-            ['📊 Umumiy statistika', '👨‍🏫 O\'qituvchilar'],
-            ['💳 Karta sozlamalari', '💰 Tariflar'],
-            ['📩 To\'lov so\'rovlari', '💳 Qolda tarif berish'],
-            ['📢 E\'lon berish', '📊 API Monitoring'],
+            ['👥 Foydalanuvchilar', '📚 Matnlar'],
+            ['📝 Writing Mavzulari', '✍️ Test Boshqaruvi'],
+            ['🤖 AI Matn', '🤖 AI Test Yaratish'],
+            ['📊 Statistika', '👨‍🏫 O\'qituvchilar'],
+            ['💳 Karta', '💰 Tariflar'],
+            ['📩 To\'lovlar', '📢 E\'lon'],
             ['📡 Kanallar', '🔙 Asosiy menyu']
         ]).resize();
 
@@ -2014,7 +2015,14 @@ class CommandHandler {
 
         // Use tariff word limit or a safer default (100) instead of 30
         const wordLimit = payment.word_limit || payment.tariff_word_limit || 100;
-        await database.approvePremium(payment.user_id, payment.duration_days, payment.limit_per_day, wordLimit);
+        await database.approvePremium(
+            payment.user_id, 
+            payment.duration_days, 
+            payment.limit_per_day, 
+            wordLimit,
+            payment.writing_limit,
+            payment.test_limit
+        );
 
         await ctx.answerCbQuery("✅ To'lov tasdiqlandi!");
         await ctx.editMessageCaption(`✅ <b>To'lov tasdiqlandi (ID: ${paymentId})</b>`, { parse_mode: 'HTML' });
@@ -2587,6 +2595,410 @@ class CommandHandler {
         } catch (error) {
             console.error('handleRemoveChannel error:', error);
             await ctx.answerCbQuery('❌ Kanal o\'chirishda xatolik yuz berdi.', { show_alert: true }).catch(() => {});
+        }
+    }
+
+    async handleWritingMenu(ctx) {
+        const categories = [
+            [Markup.button.callback('IELTS Task 1', 'writing_cat_IELTS Task 1')],
+            [Markup.button.callback('IELTS Task 2', 'writing_cat_IELTS Task 2')],
+            [Markup.button.callback('Business', 'writing_cat_Business')],
+            [Markup.button.callback('Daily life', 'writing_cat_Daily life')],
+            [Markup.button.callback('🎲 Tasodifiy (Random)', 'writing_random')]
+        ];
+        await ctx.reply('📝 *Writing (Insho) Moduli*\n\nYo\'nalishni tanlang:', {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard(categories)
+        });
+    }
+
+    async handleWritingCategory(ctx) {
+        const category = ctx.match[1];
+        const topics = await database.getTopics('writing');
+        const filtered = topics.filter(t => t.category === category);
+
+        if (filtered.length === 0) {
+            return ctx.answerCbQuery('⚠️ Bu yo\'nalishda hali mavzular yo\'q.', { show_alert: true });
+        }
+
+        let msg = `📝 *${category}* yo'nalishidagi mavzular:\n\n`;
+        const buttons = filtered.map(t => [Markup.button.callback(t.title, `writing_topic_${t.id}`)]);
+
+        await ctx.editMessageText(msg, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard(buttons)
+        });
+    }
+
+    async handleWritingRandom(ctx) {
+        const topics = await database.getTopics('writing');
+        if (topics.length === 0) {
+            return ctx.answerCbQuery('⚠️ Hali mavzular qo\'shilmagan.', { show_alert: true });
+        }
+        const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+        return this.handleWritingTopicSelection(ctx, randomTopic.id);
+    }
+
+    async handleWritingTopicSelection(ctx, manualId = null) {
+        const topicId = manualId || ctx.match[1];
+        const topic = await database.getTopicById(topicId);
+
+        if (!topic) return ctx.reply('Mavzu topilmadi.');
+
+        ctx.session.currentTopic = topic;
+
+        let msg = `✍️ *Mavzu:* ${topic.title}\n\n`;
+        if (topic.description) msg += `📜 *Tavsif:* ${topic.description}\n\n`;
+        msg += `💡 Matningizni xabar sifatida yuboring yoki **daftarga yozib rasmga olib yuboring**. AI uni o'zi tahlil qilib beradi.`;
+
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(msg, { parse_mode: 'Markdown' });
+            await ctx.answerCbQuery();
+        } else {
+            await ctx.reply(msg, { parse_mode: 'Markdown' });
+        }
+    }
+
+    async processWritingSubmission(ctx) {
+        const text = ctx.message.text;
+        const topic = ctx.session.currentTopic;
+
+        const statusMsg = await ctx.reply('AI tahlil qilmoqda... ⏳');
+
+        try {
+            const result = await assessmentService.processWriting(ctx.from, text, topic?.id);
+            if (result.success) {
+                await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, result.text, { parse_mode: 'Markdown' });
+            } else {
+                let errorMsg = `❌ Xatolik: ${result.error}`;
+                if (result.error === 'LIMIT_EXCEEDED') {
+                    errorMsg = `⚠️ *Kunlik limit tugadi!*\n\nBepul foydalanuvchilar uchun kuniga 2ta writing tahlili ruxsat etiladi. Ko'proq foydalanish uchun tariflardan birini xarid qiling.`;
+                }
+                await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, errorMsg, { parse_mode: 'Markdown' });
+            }
+        } catch (error) {
+            console.error('Writing submission error:', error);
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, '❌ Tahlil jarayonida xatolik yuz berdi.');
+        } finally {
+            ctx.session.state = null;
+            ctx.session.currentTopic = null;
+        }
+    }
+
+    async processWritingImageSubmission(ctx) {
+        const topic = ctx.session.currentTopic;
+        const statusMsg = await ctx.reply('Rasm qabul qilindi. AI matnni aniqlab tahlil qilmoqda... ⏳');
+
+        try {
+            const photo = ctx.message.photo[ctx.message.photo.length - 1];
+            const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+            
+            const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+            const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+
+            const result = await assessmentService.processWriting(ctx.from, null, topic?.id, base64Image);
+            
+            if (result.success) {
+                let msg = `✅ *Matn aniqlandi:* \n\n_"${result.data.extractedText || 'Matnni to\'liq aniqlab bo\'lmadi'}"_\n\n`;
+                msg += result.text;
+                await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, msg, { parse_mode: 'Markdown' });
+            } else {
+                let errorMsg = `❌ Xatolik: ${result.error}`;
+                if (result.error === 'LIMIT_EXCEEDED') {
+                    errorMsg = `⚠️ *Kunlik limit tugadi!*\n\nBepul foydalanuvchilar uchun kuniga 2ta writing tahlili ruxsat etiladi. Ko'proq foydalanish uchun tariflardan birini xarid qiling.`;
+                }
+                await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, errorMsg, { parse_mode: 'Markdown' });
+            }
+        } catch (error) {
+            console.error('Writing image submission error:', error);
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, '❌ Rasmni qayta ishlashda xatolik yuz berdi.');
+        } finally {
+            ctx.session.state = null;
+            ctx.session.currentTopic = null;
+        }
+    }
+
+    async handleTestMenu(ctx) {
+        const menu = Markup.inlineKeyboard([
+            [Markup.button.callback('📚 Mavzuli (Topic-based)', 'test_cat_list')],
+            [Markup.button.callback('🎲 Mix (Random 20)', 'test_start_random_20')],
+            [Markup.button.callback('🎲 Mix (Random 35)', 'test_start_random_35')],
+            [Markup.button.callback('🎲 Mix (Random 50)', 'test_start_random_50')]
+        ]);
+        await ctx.reply('✍️ *Test tizimi*\n\nBilimingizni tekshirish uchun test turini tanlang:', {
+            parse_mode: 'Markdown',
+            ...menu
+        });
+    }
+
+    async handleTestCategoryList(ctx) {
+        const topics = await database.getTopics('test');
+        if (topics.length === 0) {
+            return ctx.answerCbQuery('⚠️ Hozircha mavzuli testlar yo\'q.', { show_alert: true });
+        }
+
+        const buttons = topics.map(t => [Markup.button.callback(t.title, `test_start_topic_${t.id}`)]);
+        await ctx.editMessageText('📚 Kerakli mavzuni tanlang:', Markup.inlineKeyboard(buttons));
+    }
+
+    async handleTestStart(ctx, topicId = null, count = 20) {
+        const result = await testService.startTest(ctx.from.id, topicId, count);
+        if (!result.success) {
+            if (result.error === 'LIMIT_EXCEEDED') {
+                return ctx.reply('⚠️ *Kunlik limit tugadi!*\n\nBepul foydalanuvchilar uchun kuniga 5ta test topshirish ruxsat etiladi. Ko\'proq foydalanish uchun tariflardan birini xarid qiling.', { parse_mode: 'Markdown' });
+            }
+            return ctx.answerCbQuery('⚠️ Bu mavzuda savollar yetarli emas.', { show_alert: true });
+        }
+
+        const session = result.session;
+        return this.sendTestQuestion(ctx, session);
+    }
+
+    async sendTestQuestion(ctx, session) {
+        // Clear any existing timer
+        if (session.timer) {
+            clearTimeout(session.timer);
+        }
+
+        const question = session.questions[session.currentIndex];
+        const progress = testService.getProgressBar(session.currentIndex + 1, session.questions.length);
+        const timeLimit = question.time_limit || 12;
+
+        let msg = `❓ *Savol ${session.currentIndex + 1}/${session.questions.length}*\n\n`;
+        msg += `${question.question_text}\n\n`;
+        msg += `⏳ Vaqt: *${timeLimit} soniya*\n`;
+        msg += `💎 Ball: *${question.points || 1}*\n\n`;
+        msg += `${progress} ${Math.round(((session.currentIndex + 1) / session.questions.length) * 100)}%`;
+
+        const buttons = question.options.map((opt, idx) => [Markup.button.callback(`${String.fromCharCode(65 + idx)}) ${opt}`, `test_ans_${idx}`)]);
+
+        // Start new timer
+        session.timer = setTimeout(async () => {
+            const currentSession = testService.getSession(ctx.from.id);
+            if (currentSession && currentSession.currentIndex === session.currentIndex) {
+                await ctx.reply(`⏰ Vaqt tugadi! Keyingi savolga o'tilmoqda...`).catch(() => {});
+                const result = await testService.submitAnswer(ctx.from.id, null); // null means timeout
+                if (result) {
+                    if (result.isFinished) {
+                        return this.showTestResults(ctx, result);
+                    } else {
+                        return this.sendTestQuestion(ctx, currentSession);
+                    }
+                }
+            }
+        }, timeLimit * 1000);
+
+        session.lastQuestionTime = Date.now();
+
+        if (ctx.callbackQuery) {
+            if (question.image_url) {
+                await ctx.deleteMessage().catch(() => {});
+                await ctx.replyWithPhoto(question.image_url, { caption: msg, parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+            } else {
+                await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+            }
+        } else {
+            if (question.image_url) {
+                await ctx.replyWithPhoto(question.image_url, { caption: msg, parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+            } else {
+                await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+            }
+        }
+    }
+
+    async handleTestAnswer(ctx) {
+        const answerIndex = ctx.match[1];
+        const session = testService.getSession(ctx.from.id);
+        
+        if (!session) return ctx.answerCbQuery('Seans topilmadi.');
+
+        // Clear timer
+        if (session.timer) {
+            clearTimeout(session.timer);
+            session.timer = null;
+        }
+
+        const result = await testService.submitAnswer(ctx.from.id, answerIndex);
+
+        if (result.isFinished) {
+            return this.showTestResults(ctx, result);
+        }
+
+        return this.sendTestQuestion(ctx, session);
+    }
+
+    async showTestResults(ctx, result) {
+        const progress = testService.getProgressBar(result.total, result.total);
+        let finalMsg = result.forceQuit 
+            ? `⚠️ *Test to'xtatildi!*\nKetma-ket 4 marta javob bermaganingiz uchun test muddatdan oldin yakunlandi.\n\n`
+            : `🏁 *Test yakunlandi!*\n\n`;
+            
+        finalMsg += `📊 Umumiy ball: *${result.score}*\n`;
+        finalMsg += `📈 Natija: *${Math.round((result.score / (result.total * 1)) * 100)}%*\n\n`; // Simplified %
+        finalMsg += `${progress} 100%`;
+
+        if (ctx.callbackQuery && ctx.callbackQuery.message.photo) {
+            await ctx.editMessageCaption(finalMsg, { parse_mode: 'Markdown' });
+        } else if (ctx.callbackQuery) {
+            await ctx.editMessageText(finalMsg, { parse_mode: 'Markdown' });
+        } else {
+            await ctx.reply(finalMsg, { parse_mode: 'Markdown' });
+        }
+        return ctx.answerCbQuery('Test yakunlandi!').catch(() => {});
+    }
+
+    // --- Admin Handlers ---
+
+    async handleAdminAiTestGeneration(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        ctx.session.state = 'waiting_for_ai_test_topic';
+        await ctx.reply('🤖 *AI Test Yaratish*\n\nIltimos, mavzu nomini yozing (masalan: "Present Simple"):', { parse_mode: 'Markdown' });
+    }
+
+    async processAiTestGeneration(ctx) {
+        const topicName = ctx.message.text;
+        const statusMsg = await ctx.reply('AI savollar yaratmoqda... ⏳');
+
+        try {
+            const questions = await geminiService.generateAiTests(topicName, 5);
+            
+            // Create a temporary topic for these questions or find existing
+            let topic = (await database.getTopics('test')).find(t => t.title === topicName);
+            if (!topic) {
+                topic = await database.addTopic({
+                    type: 'test',
+                    category: 'AI Generated',
+                    title: topicName,
+                    difficulty: 'medium'
+                });
+            }
+
+            for (const q of questions) {
+                await database.addQuestion({
+                    topic_id: topic.id,
+                    question_text: q.question_text,
+                    options: q.options,
+                    correct_option: q.correct_option,
+                    time_limit: q.time_limit || 12,
+                    points: q.points || 1,
+                    tags: q.tags
+                });
+            }
+
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, `✅ AI orqali ${questions.length} ta savol yaratildi va "${topicName}" mavzusiga qo'shildi.`);
+        } catch (error) {
+            console.error('AI test gen error:', error);
+            await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, '❌ Savollar yaratishda xatolik yuz berdi.');
+        } finally {
+            ctx.session.state = null;
+        }
+    }
+    async handleAdminWritingTopics(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        const topics = await database.getTopics('writing');
+        let msg = `📝 *Writing Mavzulari Ro'yxati*\n\n`;
+        
+        if (topics.length === 0) msg += "_Hozircha mavzular yo'q._";
+        
+        topics.forEach((t, i) => {
+            msg += `${i + 1}. *${t.title}* (${t.category})\n`;
+        });
+
+        const buttons = [
+            [Markup.button.callback('➕ Yangi mavzu', 'admin_add_writing_topic')],
+            [Markup.button.callback('🔙 Admin Panel', 'admin_panel_main')]
+        ];
+
+        await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    async handleAdminTestManagement(ctx) {
+        const isAdmin = await database.isAdmin(ctx.from.id);
+        if (!isAdmin) return;
+
+        const topics = await database.getTopics('test');
+        let msg = `✍️ *Test Mavzulari va Boshqaruvi*\n\n`;
+        
+        if (topics.length === 0) msg += "_Hozircha mavzular yo'q._";
+        
+        const buttons = topics.map(t => [Markup.button.callback(`📂 ${t.title}`, `admin_view_questions_${t.id}`)]);
+
+        buttons.push([Markup.button.callback('🤖 AI orqali yaratish', 'admin_ai_test_gen')]);
+        buttons.push([Markup.button.callback('➕ Qo\'lda qo\'shish', 'admin_add_test_manual')]);
+        buttons.push([Markup.button.callback('🔙 Admin Panel', 'admin_panel_main')]);
+
+        await ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    async handleAdminViewQuestions(ctx) {
+        const topicId = ctx.match[1];
+        const questions = await database.getQuestions(topicId);
+        const topic = await database.getTopicById(topicId);
+
+        let msg = `📂 *${topic.title}* - Savollar:\n\n`;
+        const buttons = questions.map(q => [Markup.button.callback(q.question_text.substring(0, 30) + '...', `admin_edit_q_${q.id}`)]);
+        
+        buttons.push([Markup.button.callback('🔙 Orqaga', 'admin_test_mgmt')]);
+
+        await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    async handleAdminEditQuestion(ctx) {
+        const qId = ctx.match[1];
+        const questions = await database.getQuestions();
+        const q = questions.find(item => item.id === qId);
+
+        if (!q) return ctx.answerCbQuery('Savol topilmadi.');
+
+        let msg = `📝 *Savolni tahrirlash:*\n\n`;
+        msg += `❓ *Matn:* ${q.question_text}\n`;
+        msg += `⏳ *Vaqt:* ${q.time_limit || 12}s\n`;
+        msg += `💎 *Ball:* ${q.points || 1}\n\n`;
+        msg += `Nimani o'zgartirmoqchisiz?`;
+
+        const buttons = [
+            [Markup.button.callback('⏳ Vaqtni o\'zgartirish', `admin_set_q_time_${q.id}`)],
+            [Markup.button.callback('💎 Ballni o\'zgartirish', `admin_set_q_points_${q.id}`)],
+            [Markup.button.callback('❌ O\'chirish', `admin_del_q_${q.id}`)],
+            [Markup.button.callback('🔙 Orqaga', `admin_view_questions_${q.topic_id}`)]
+        ];
+
+        await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    async handleAdminSetQuestionValue(ctx) {
+        const [_, type, qId] = ctx.match;
+        ctx.session.state = `waiting_for_q_${type}`;
+        ctx.session.editingQId = qId;
+
+        const label = type === 'time' ? 'Vaqtni (soniyalarda)' : 'Ballni';
+        await ctx.reply(`Iltimos, yangi *${label}* kiriting:`, { parse_mode: 'Markdown' });
+        await ctx.answerCbQuery();
+    }
+
+    async processAdminEditQuestionValue(ctx) {
+        const value = parseInt(ctx.message.text);
+        if (isNaN(value)) return ctx.reply('Iltimos, faqat raqam kiriting.');
+
+        const qId = ctx.session.editingQId;
+        const type = ctx.session.state.split('_').pop(); // time or points
+
+        const updateData = {};
+        if (type === 'time') updateData.time_limit = value;
+        else updateData.points = value;
+
+        try {
+            await database.updateQuestion(qId, updateData);
+            await ctx.reply(`✅ Savol ${type === 'time' ? 'vaqti' : 'balli'} muvaffaqiyatli o'zgartirildi.`);
+        } catch (error) {
+            ctx.reply('❌ Xatolik yuz berdi.');
+        } finally {
+            ctx.session.state = null;
+            ctx.session.editingQId = null;
         }
     }
 }

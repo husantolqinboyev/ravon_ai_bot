@@ -246,34 +246,28 @@ bot.command('admin', (ctx) => commandHandler.handleAdmin(ctx));
 bot.command('teacher', (ctx) => commandHandler.handleTeacher(ctx));
 
 // Main Menu Handlers
-bot.hears('🎙 Talaffuzni tekshirish', (ctx) => commandHandler.handlePronunciationMenu(ctx));
-bot.hears('🔊 Matnni ovozga aylantirish', (ctx) => commandHandler.handleTextToAudio(ctx));
+bot.hears('🎙 Talaffuz', (ctx) => commandHandler.handlePronunciationMenu(ctx));
+bot.hears('📝 Writing (Beta)', (ctx) => commandHandler.handleWritingMenu(ctx));
+bot.hears('✍️ Test topshirish (Beta)', (ctx) => commandHandler.handleTestMenu(ctx));
+bot.hears('🔊 Matn → Ovoz', (ctx) => commandHandler.handleTextToAudio(ctx));
 bot.hears('👤 Profil', (ctx) => commandHandler.handleProfile(ctx));
-bot.hears('💳 Tariflar | Ko\'proq foyda olish', (ctx) => commandHandler.handleTariffPlan(ctx));
-bot.hears('❓ Bot qanday ishlaydi?', (ctx) => commandHandler.handleHowItWorks(ctx));
-bot.hears('📱 Mini App', (ctx) => commandHandler.handleMiniApp(ctx));
+bot.hears('💳 Tariflar', (ctx) => commandHandler.handleTariffPlan(ctx));
+bot.hears('❓ Yordam', (ctx) => commandHandler.handleHowItWorks(ctx));
 bot.hears('🏠 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 bot.hears('🔙 Asosiy menyu', (ctx) => commandHandler.handleMainMenu(ctx));
 
 // Admin & Teacher Panel Handlers
 bot.hears('👥 Foydalanuvchilar', (ctx) => commandHandler.handleUsers(ctx));
-bot.hears(['➕ Test so\'zi qo\'shish', '➕ Matn qo\'shish'], (ctx) => commandHandler.handleTestWord(ctx));
-bot.hears('👥 O\'quvchilarim', (ctx) => commandHandler.handleMyStudents(ctx));
-bot.hears('➕ Topshiriq berish', (ctx) => commandHandler.handleMyStudents(ctx));
-bot.hears('📋 Topshiriqlarim', (ctx) => commandHandler.handleMyTasks(ctx));
-bot.hears('📊 Natijalar', (ctx) => commandHandler.handleUserResults(ctx));
-bot.hears('🤖 AI matn yaratish', (ctx) => commandHandler.handleAiTextGeneration(ctx));
-bot.hears('🤖 AI so\'z yaratish', (ctx) => commandHandler.handleAiWordGeneration(ctx));
-bot.hears('📚 Matnlar ro\'yxati', (ctx) => commandHandler.handleManageTexts(ctx));
-bot.hears('📊 Umumiy statistika', (ctx) => commandHandler.handleAdminStats(ctx));
-bot.hears('📋 Oxirgi natijalar', (ctx) => commandHandler.handleUserResults(ctx));
+bot.hears('📚 Matnlar', (ctx) => commandHandler.handleManageTexts(ctx));
+bot.hears('📝 Writing Mavzulari', (ctx) => commandHandler.handleAdminWritingTopics(ctx));
+bot.hears('✍️ Test Boshqaruvi', (ctx) => commandHandler.handleAdminTestManagement(ctx));
+bot.hears('🤖 AI Test Yaratish', (ctx) => commandHandler.handleAdminAiTestGeneration(ctx));
+bot.hears('📊 Statistika', (ctx) => commandHandler.handleAdminStats(ctx));
 bot.hears('👨‍🏫 O\'qituvchilar', (ctx) => commandHandler.handleTeachers(ctx));
-bot.hears('💳 Karta sozlamalari', (ctx) => commandHandler.handleCardSettings(ctx));
+bot.hears('💳 Karta', (ctx) => commandHandler.handleCardSettings(ctx));
 bot.hears('💰 Tariflar', (ctx) => commandHandler.handleTariffSettings(ctx));
-bot.hears('📩 To\'lov so\'rovlari', (ctx) => commandHandler.handlePaymentRequests(ctx));
-bot.hears('📢 E\'lon berish', (ctx) => commandHandler.handleBroadcastRequest(ctx));
-bot.hears('📊 API Monitoring', (ctx) => commandHandler.handleApiMonitoring(ctx));
-bot.hears('💳 Qolda tarif berish', (ctx) => commandHandler.handleManualTariffRequest(ctx));
+bot.hears('📩 To\'lovlar', (ctx) => commandHandler.handlePaymentRequests(ctx));
+bot.hears('📢 E\'lon', (ctx) => commandHandler.handleBroadcastRequest(ctx));
 bot.hears('📡 Kanallar', (ctx) => commandHandler.handleChannels(ctx));
 
 // Admin commands with arguments
@@ -305,6 +299,12 @@ bot.action(/mat_(\d+)_(.+)/, (ctx) => commandHandler.handleManualTariffApply(ctx
 bot.action('admin_channels', (ctx) => commandHandler.handleChannels(ctx));
 bot.action('admin_add_channel', (ctx) => commandHandler.handleAddChannel(ctx));
 bot.action(/remove_channel_(.+)/, (ctx) => commandHandler.handleRemoveChannel(ctx));
+bot.action('admin_ai_test_gen', (ctx) => commandHandler.handleAdminAiTestGeneration(ctx));
+bot.action('admin_writing_topics', (ctx) => commandHandler.handleAdminWritingTopics(ctx));
+bot.action('admin_test_mgmt', (ctx) => commandHandler.handleAdminTestManagement(ctx));
+bot.action(/admin_view_questions_(.+)/, (ctx) => commandHandler.handleAdminViewQuestions(ctx));
+bot.action(/admin_edit_q_(.+)/, (ctx) => commandHandler.handleAdminEditQuestion(ctx));
+bot.action(/admin_set_q_(time|points)_(.+)/, (ctx) => commandHandler.handleAdminSetQuestionValue(ctx));
 
 // AI Generation actions
 bot.action(/ai_generate_(easy|medium|hard)_(word|sentence|text)/, (ctx) => commandHandler.handleAiGenerate(ctx));
@@ -336,26 +336,25 @@ bot.action('download_pdf_report', (ctx) => commandHandler.handleDownloadPdfRepor
 bot.action(/play_correct_/, (ctx) => commandHandler.handlePlayCorrect(ctx));
 bot.action('listen_test_text', (ctx) => commandHandler.handleListenTestText(ctx));
 bot.action('confirm_test_reading', (ctx) => commandHandler.handleConfirmTestReading(ctx));
-bot.action(/random_(word|text)/, (ctx) => commandHandler.handleRandomStart(ctx));
-bot.action(/start_test_(.+)/, (ctx) => commandHandler.handleStartTestById(ctx));
-bot.action('test_pronunciation_list', (ctx) => commandHandler.handleTestPronunciationList(ctx));
-bot.action(/delete_text_(.+)/, (ctx) => commandHandler.handleDeleteText(ctx));
-bot.action('pronunciation_write_own', (ctx) => commandHandler.handlePronunciationWriteOwn(ctx));
-bot.action('pronunciation_random', (ctx) => commandHandler.handleRandomMenu(ctx));
-bot.action('top_users', (ctx) => commandHandler.handleTopUsers(ctx));
-bot.action(/texts_page_(.+)/, (ctx) => commandHandler.handleTextsPage(ctx));
-bot.action('texts_type_word', (ctx) => commandHandler.handleTextsType(ctx));
-bot.action('texts_type_text', (ctx) => commandHandler.handleTextsType(ctx));
-bot.action('cancel_texts_mgmt', (ctx) => commandHandler.handleCancelTexts(ctx));
-bot.action(/users_page_(.+)/, (ctx) => commandHandler.handleUsersPage(ctx));
-bot.action('users_type_free', (ctx) => commandHandler.handleUsersType(ctx));
-bot.action('users_type_premium', (ctx) => commandHandler.handleUsersType(ctx));
-bot.action('cancel_users_mgmt', (ctx) => commandHandler.handleCancelUsers(ctx));
+// Writing & Testing actions
+bot.action(/writing_cat_(.+)/, (ctx) => commandHandler.handleWritingCategory(ctx));
+bot.action('writing_random', (ctx) => commandHandler.handleWritingRandom(ctx));
+bot.action(/writing_topic_(.+)/, (ctx) => commandHandler.handleWritingTopicSelection(ctx));
+bot.action('test_cat_list', (ctx) => commandHandler.handleTestCategoryList(ctx));
+bot.action(/test_start_random_(\d+)/, (ctx) => commandHandler.handleTestStart(ctx, null, ctx.match[1]));
+bot.action(/test_start_topic_(.+)/, (ctx) => commandHandler.handleTestStart(ctx, ctx.match[1]));
+bot.action(/test_ans_(\d+)/, (ctx) => commandHandler.handleTestAnswer(ctx));
 
 // Audio and voice messages
 bot.on(['audio', 'voice'], (ctx) => audioHandler.handleAudio(ctx));
 
 // Text message handling for state machine and other messages
+bot.on('photo', (ctx) => {
+    if (ctx.session?.state === 'waiting_for_writing_text') {
+        return commandHandler.processWritingImageSubmission(ctx);
+    }
+});
+
 bot.on('text', async (ctx, next) => {
     if (ctx.session?.state === 'broadcast_waiting_button') {
         return commandHandler.handleBroadcastAddButtonSave(ctx);
@@ -391,10 +390,22 @@ bot.on('text', async (ctx, next) => {
         return commandHandler.handleAddChannelProcess(ctx);
     }
 
+    if (ctx.session?.state === 'waiting_for_writing_text') {
+        return commandHandler.processWritingSubmission(ctx);
+    }
+
+    if (ctx.session?.state === 'waiting_for_ai_test_topic') {
+        return commandHandler.processAiTestGeneration(ctx);
+    }
+
+    if (ctx.session?.state && (ctx.session.state === 'waiting_for_q_time' || ctx.session.state === 'waiting_for_q_points')) {
+        return commandHandler.processAdminEditQuestionValue(ctx);
+    }
+
     // Check if it's a command or menu button, if so, reset state and let next middleware handle it
     const menuButtons = [
-        '🎙 Talaffuzni tekshirish', '🔊 Matnni ovozga aylantirish',
-        '👤 Profil', '💳 Tariflar | Ko\'proq foyda olish', '❓ Bot qanday ishlaydi?',
+        '🎙 Talaffuz', '📝 Writing (Beta)', '✍️ Test topshirish (Beta)',
+        '🔊 Matn → Ovoz', '👤 Profil', '💳 Tariflar', '❓ Yordam',
         '🏠 Asosiy menyu', '🔙 Asosiy menyu'
     ];
 

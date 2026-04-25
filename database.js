@@ -51,9 +51,9 @@ class Database {
             if (tariffCount === 0) {
                 console.log('Seeding default tariffs...');
                 const defaultTariffs = [
-                    { name: 'Basic', price: 15000, duration_days: 7, limit_per_day: 50, word_limit: 70 },
-                    { name: 'Standart', price: 32000, duration_days: 30, limit_per_day: 200, word_limit: 150 },
-                    { name: 'Premium', price: 300000, duration_days: 365, limit_per_day: 1000, word_limit: 300 }
+                    { name: 'Basic', price: 15000, duration_days: 7, limit_per_day: 50, word_limit: 70, writing_limit: 5, test_limit: 20 },
+                    { name: 'Standart', price: 32000, duration_days: 30, limit_per_day: 200, word_limit: 150, writing_limit: 15, test_limit: 50 },
+                    { name: 'Premium', price: 300000, duration_days: 365, limit_per_day: 1000, word_limit: 300, writing_limit: 50, test_limit: 200 }
                 ];
 
                 const { error } = await this.supabase
@@ -228,11 +228,11 @@ class Database {
         }
     }
 
-    async checkLimit(telegramId) {
+    async checkLimit(telegramId, type = 'general') {
         try {
             const { data, error } = await this.supabase
                 .from('users')
-                .select('used_today, daily_limit, bonus_limit, last_active')
+                .select('used_today, daily_limit, bonus_limit, last_active, writing_used_today, writing_limit, test_used_today, test_limit')
                 .eq('telegram_id', telegramId)
                 .single();
 
@@ -242,16 +242,27 @@ class Database {
 
             if (!data) return true;
 
-            const lastActive = new Date(data.last_active);
+            const lastActive = data.last_active ? new Date(data.last_active) : new Date(0);
             const today = new Date();
 
             // If last active was not today, reset used_today
             if (lastActive.toDateString() !== today.toDateString()) {
                 await this.supabase
                     .from('users')
-                    .update({ used_today: 0 })
+                    .update({ 
+                        used_today: 0, 
+                        writing_used_today: 0, 
+                        test_used_today: 0,
+                        last_active: today.toISOString()
+                    })
                     .eq('telegram_id', telegramId);
                 return true;
+            }
+
+            if (type === 'writing') {
+                return data.writing_used_today < data.writing_limit;
+            } else if (type === 'test') {
+                return data.test_used_today < data.test_limit;
             }
 
             // Check if daily limit or bonus limit is available
@@ -264,11 +275,11 @@ class Database {
         }
     }
 
-    async incrementUsage(telegramId) {
+    async incrementUsage(telegramId, type = 'general') {
         try {
             const { data, error } = await this.supabase
                 .from('users')
-                .select('used_today, daily_limit, bonus_limit')
+                .select('used_today, daily_limit, bonus_limit, writing_used_today, writing_limit, test_used_today, test_limit')
                 .eq('telegram_id', telegramId)
                 .single();
 
@@ -280,10 +291,16 @@ class Database {
 
             let updateData = { last_active: new Date().toISOString() };
 
-            if (data.used_today < data.daily_limit) {
-                updateData.used_today = data.used_today + 1;
-            } else if (data.bonus_limit > 0) {
-                updateData.bonus_limit = data.bonus_limit - 1;
+            if (type === 'writing') {
+                updateData.writing_used_today = (data.writing_used_today || 0) + 1;
+            } else if (type === 'test') {
+                updateData.test_used_today = (data.test_used_today || 0) + 1;
+            } else {
+                if (data.used_today < data.daily_limit) {
+                    updateData.used_today = data.used_today + 1;
+                } else if (data.bonus_limit > 0) {
+                    updateData.bonus_limit = data.bonus_limit - 1;
+                }
             }
 
             await this.supabase
@@ -811,7 +828,7 @@ class Database {
                 .select(`
                     *,
                     user:users!user_id(telegram_id),
-                    tariff:tariffs!tariff_id(duration_days, limit_per_day, word_limit)
+                    tariff:tariffs!tariff_id(duration_days, limit_per_day, word_limit, writing_limit, test_limit)
                 `)
                 .eq('id', id)
                 .single();
@@ -826,7 +843,9 @@ class Database {
                     telegram_id: data.user?.telegram_id,
                     duration_days: data.tariff?.duration_days,
                     limit_per_day: data.tariff?.limit_per_day,
-                    word_limit: data.tariff?.word_limit
+                    word_limit: data.tariff?.word_limit,
+                    writing_limit: data.tariff?.writing_limit,
+                    test_limit: data.tariff?.test_limit
                 };
             }
             return data;
@@ -851,7 +870,7 @@ class Database {
         }
     }
 
-    async approvePremium(userId, days, dailyLimit, wordLimit = 30) {
+    async approvePremium(userId, days, dailyLimit, wordLimit = 30, writingLimit = 10, testLimit = 50) {
         try {
             const until = new Date();
             until.setDate(until.getDate() + days);
@@ -862,7 +881,9 @@ class Database {
                     is_premium: true,
                     premium_until: until.toISOString(),
                     daily_limit: dailyLimit,
-                    word_limit: wordLimit
+                    word_limit: wordLimit,
+                    writing_limit: writingLimit,
+                    test_limit: testLimit
                 })
                 .eq('id', userId);
 
@@ -1654,6 +1675,172 @@ class Database {
             }
         } catch (error) {
             console.error('Error in seedDefaultChannels:', error);
+        }
+    }
+
+    // --- Topics, Questions & Results ---
+
+    async getTopics(type = null) {
+        try {
+            let query = this.supabase.from('topics').select('*').order('created_at', { ascending: false });
+            if (type) query = query.eq('type', type);
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting topics:', error);
+            return [];
+        }
+    }
+
+    async getTopicById(id) {
+        try {
+            const { data, error } = await this.supabase.from('topics').select('*').eq('id', id).single();
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting topic by ID:', error);
+            return null;
+        }
+    }
+
+    async addTopic(topicData) {
+        try {
+            const { data, error } = await this.supabaseAdmin.from('topics').insert(topicData).select().single();
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding topic:', error);
+            throw error;
+        }
+    }
+
+    async updateTopic(id, topicData) {
+        try {
+            const { error } = await this.supabaseAdmin.from('topics').update(topicData).eq('id', id);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error updating topic:', error);
+            throw error;
+        }
+    }
+
+    async deleteTopic(id) {
+        try {
+            const { error } = await this.supabaseAdmin.from('topics').delete().eq('id', id);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting topic:', error);
+            throw error;
+        }
+    }
+
+    async getQuestions(topicId = null, limit = 50) {
+        try {
+            let query = this.supabase.from('questions').select('*, topic:topics(title)');
+            if (topicId) query = query.eq('topic_id', topicId);
+            const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting questions:', error);
+            return [];
+        }
+    }
+
+    async getRandomQuestions(limit = 20, topicId = null) {
+        try {
+            let query = this.supabase.from('questions').select('*');
+            if (topicId) query = query.eq('topic_id', topicId);
+            
+            const { data, error } = await query;
+            if (error) throw error;
+            if (!data || data.length === 0) return [];
+            
+            // Shuffle and limit in JS
+            return data.sort(() => 0.5 - Math.random()).slice(0, limit);
+        } catch (error) {
+            console.error('Error getting random questions:', error);
+            return [];
+        }
+    }
+
+    async addQuestion(questionData) {
+        try {
+            const { data, error } = await this.supabaseAdmin.from('questions').insert(questionData).select().single();
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding question:', error);
+            throw error;
+        }
+    }
+
+    async updateQuestion(id, questionData) {
+        try {
+            const { error } = await this.supabaseAdmin.from('questions').update(questionData).eq('id', id);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error updating question:', error);
+            throw error;
+        }
+    }
+
+    async deleteQuestion(id) {
+        try {
+            const { error } = await this.supabaseAdmin.from('questions').delete().eq('id', id);
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting question:', error);
+            throw error;
+        }
+    }
+
+    async saveUserResult(resultData) {
+        try {
+            const { data, error } = await this.supabaseAdmin.from('user_results').insert(resultData).select().single();
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error saving user result:', error);
+            throw error;
+        }
+    }
+
+    async getUserResults(userId, type = null, limit = 10) {
+        try {
+            let query = this.supabase.from('user_results').select('*, topic:topics(title)').eq('user_id', userId);
+            if (type) query = query.eq('type', type);
+            const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting user results:', error);
+            return [];
+        }
+    }
+
+    async seedDefaultTopics() {
+        try {
+            const { count } = await this.supabase.from('topics').select('*', { count: 'exact', head: true });
+            if (count === 0) {
+                console.log('Seeding default topics...');
+                const defaultTopics = [
+                    { type: 'writing', category: 'IELTS Task 2', title: 'Technology and Society', description: 'Some people think that technology has made our lives more complex. Others believe it has made our lives simpler. Discuss both views and give your opinion.', difficulty: 'hard' },
+                    { type: 'writing', category: 'Business', title: 'Formal Email Writing', description: 'Write a formal email to a potential business partner proposing a new collaboration.', difficulty: 'medium' },
+                    { type: 'writing', category: 'Daily life', title: 'My Favorite Hobby', description: 'Describe your favorite hobby and why you enjoy it so much.', difficulty: 'easy' },
+                    { type: 'test', category: 'Grammar', title: 'Present Simple', group: 'Tenses', difficulty: 'easy' },
+                    { type: 'test', category: 'Grammar', title: 'Prepositions', group: 'Vocabulary', difficulty: 'medium' }
+                ];
+                await this.supabaseAdmin.from('topics').insert(defaultTopics);
+                console.log('✅ Default topics seeded');
+            }
+        } catch (error) {
+            console.error('Error seeding default topics:', error);
         }
     }
 }

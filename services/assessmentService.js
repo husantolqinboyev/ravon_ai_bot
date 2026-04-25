@@ -286,6 +286,113 @@ class AssessmentService {
     async getUserStats(telegramId) {
         return await database.getUserStats(telegramId);
     }
+    async processWriting(user, text, topicId = null, imageData = null) {
+        try {
+            const canProceed = await database.checkLimit(user.telegram_id, 'writing');
+            if (!canProceed) throw new Error('LIMIT_EXCEEDED');
+
+            let topic = null;
+            if (topicId) {
+                topic = await database.getTopicById(topicId);
+            }
+
+            // Step 1: AI Analysis (supporting vision)
+            const analysis = await geminiService.analyzeWriting(text, topic, imageData);
+
+            // Log API usage
+            if (analysis._usage) {
+                try {
+                    await database.logApiUsage(
+                        analysis._model || 'gemini',
+                        analysis._usage.prompt_tokens || 0,
+                        analysis._usage.completion_tokens || 0,
+                        analysis._usage.total_tokens || 0,
+                        'writing_analysis'
+                    );
+                } catch (e) {}
+            }
+
+            // Step 2: Save to DB
+            try {
+                const userIdInDb = await database.saveUser(user);
+                await database.saveUserResult({
+                    user_id: userIdInDb,
+                    type: 'writing',
+                    topic_id: topicId,
+                    content: analysis.extractedText || text,
+                    score: analysis.overallScore,
+                    analysis: analysis
+                });
+                await database.incrementUsage(user.telegram_id, 'writing');
+            } catch (e) {
+                console.error('DB error in processWriting:', e.message);
+            }
+
+            // Step 3: Format
+            const responseText = this.formatWritingResponse(analysis);
+            return { 
+                success: true, 
+                text: responseText, 
+                data: analysis
+            };
+        } catch (error) {
+            console.error('Writing processing error:', error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    formatWritingResponse(analysis) {
+        // AI returns a pre-formatted string in analysis.formattedFeedback
+        // but we can also build it here for more control if needed.
+        if (analysis.isOriginal === false) {
+            let warn = `⚠️ *DIQQAT: KO'CHIRMA MATN ANIQLANDI!*\n`;
+            warn += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+            warn += `Siz yuborgan matn qisman yoki to'liq internetdan ko'chirilgan yoki AI yordamida yozilgan deb topildi.\n\n`;
+            warn += `💡 *Qoida:* Ball olish uchun matnni o'zingiz, mustaqil ravishda yozishingiz shart. Ko'chirma matnlarga *0 ball* beriladi.\n\n`;
+            warn += `🏆 *UMUMIY BALL: 0*\n`;
+            warn += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+            return warn;
+        }
+
+        let res = `📝 *WRITING TAHLILI NATIJASI*\n`;
+        res += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        res += `🏆 *UMUMIY BALL: ${analysis.overallScore}*\n\n`;
+        
+        res += `📊 *KO'RSATKICHLAR:*\n`;
+        res += `• Grammatika: *${analysis.grammarScore}*\n`;
+        res += `• Lug'at: *${analysis.vocabularyScore}*\n`;
+        res += `• Mazmun/Bog'liqlik: *${analysis.cohesionScore}*\n\n`;
+
+        const feedback = analysis.feedback;
+        if (feedback.grammar && feedback.grammar.length > 0) {
+            res += `⚠️ *GRAMMATIK XATOLAR:*\n`;
+            feedback.grammar.slice(0, 5).forEach(e => {
+                res += `❌ _${e.error}_\n`;
+                res += `✅ *${e.correction}*\n`;
+                res += `💡 ${e.explanation}\n\n`;
+            });
+        }
+
+        if (feedback.vocabulary && feedback.vocabulary.suggestions && feedback.vocabulary.suggestions.length > 0) {
+            res += `📚 *LUG'AT BOYITISH:*\n`;
+            feedback.vocabulary.suggestions.slice(0, 3).forEach(s => {
+                res += `🔸 _${s.original}_ → *${s.better}*\n`;
+                res += `💡 ${s.reason}\n`;
+            });
+            res += `\n`;
+        }
+
+        res += `🔗 *BOG'LIQLIK (COHESION):*\n`;
+        res += `${feedback.cohesion}\n\n`;
+
+        res += `💡 *UMUMIY TAVSIYALAR:*\n`;
+        feedback.generalAdvice.forEach(a => res += `✅ ${a}\n`);
+
+        res += `\n━━━━━━━━━━━━━━━━━━━━━━\n`;
+        res += `_Ravon AI • Professional Writing Tahlili_`;
+
+        return res;
+    }
 }
 
 module.exports = new AssessmentService();
