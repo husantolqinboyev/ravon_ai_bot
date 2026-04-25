@@ -754,8 +754,12 @@
 
         async function sendAudio(blob, referenceText) {
             btnRecord.disabled = true;
-            analyzeStatus.classList.remove('hidden');
-            resultDisplay.classList.add('hidden');
+            const statusEl = document.getElementById('analyze-status');
+            const resultEl = document.getElementById('result-display');
+            const mainScreen = document.getElementById('analyze-main-screen');
+
+            statusEl.classList.remove('hidden');
+            resultEl.classList.add('hidden');
 
             try {
                 const form = new FormData();
@@ -763,66 +767,73 @@
                 form.append('reference_text', referenceText);
                 
                 const res = await fetchAPI('/analyze-audio', 'post', form);
-                if (res.success) {
+                console.log('Analysis result:', res);
+
+                if (res.success && res.data) {
                     const data = res.data;
+                    
+                    // Ballarni yangilash
                     document.getElementById('score-total').innerText = data.overallScore || 0;
                     document.getElementById('score-accuracy').innerText = (data.accuracyScore || 0) + '%';
                     
-                    // Safe access to feedback
-                    let feedback = "Ajoyib harakat!";
+                    // Feedbackni aniqlash
+                    let feedback = "Tahlil yakunlandi.";
                     if (data.detailedFeedback) {
-                        if (data.detailedFeedback.phoneticAnalysis && data.detailedFeedback.phoneticAnalysis.prosodyFeedback) {
-                            feedback = data.detailedFeedback.phoneticAnalysis.prosodyFeedback;
-                        } else if (data.detailedFeedback.actionPlan && data.detailedFeedback.actionPlan.length > 0) {
-                            feedback = data.detailedFeedback.actionPlan[0];
+                        const df = data.detailedFeedback;
+                        if (typeof df === 'string') {
+                            try {
+                                const parsed = JSON.parse(df);
+                                feedback = parsed.phoneticAnalysis?.prosodyFeedback || parsed.actionPlan?.[0] || feedback;
+                            } catch(e) { feedback = df; }
+                        } else {
+                            feedback = df.phoneticAnalysis?.prosodyFeedback || df.actionPlan?.[0] || feedback;
                         }
                     }
                     document.getElementById('feedback-content').innerText = feedback;
                     
-                    // Button Actions
+                    // PDF va TTS tugmalari
                     document.getElementById('btn-download-pdf').onclick = () => {
                         if (data.id) {
-                            window.open(`${API_URL}/download-pdf/${data.id}?init_data=${encodeURIComponent(tg.initData)}`, '_blank');
+                            const url = `${API_URL}/download-pdf/${data.id}?init_data=${encodeURIComponent(tg.initData)}`;
+                            tg.openLink(url);
                         } else {
-                            tg.showAlert('PDF yaratib bo\'lmadi (ID topilmadi)');
+                            tg.showAlert('PDF ID topilmadi');
                         }
                     };
 
                     document.getElementById('btn-download-tts').onclick = async () => {
-                        const text = referenceText;
                         const btn = document.getElementById('btn-download-tts');
-                        const originalText = btn.innerText;
+                        const oldText = btn.innerText;
                         btn.innerText = '⌛...';
-                        btn.disabled = true;
-
                         try {
                             const ttsRes = await fetch(`${API_URL}/text-to-speech`, {
                                 method: 'POST',
                                 headers: { 'x-telegram-init-data': tg.initData, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ text, voice: 'en-US-JennyNeural' })
+                                body: JSON.stringify({ text: referenceText, voice: 'en-US-JennyNeural' })
                             });
                             if (ttsRes.ok) {
-                                const blob = await ttsRes.blob();
-                                const audio = new Audio(URL.createObjectURL(blob));
+                                const audioBlob = await ttsRes.blob();
+                                const audio = new Audio(URL.createObjectURL(audioBlob));
                                 audio.play();
                             }
-                        } catch (e) {
-                            tg.showAlert('Ovoz yuklashda xato');
-                        } finally {
-                            btn.innerText = originalText;
-                            btn.disabled = false;
-                        }
+                        } catch (e) { console.error(e); }
+                        btn.innerText = oldText;
                     };
 
-                    resultDisplay.classList.remove('hidden');
+                    // Natijani ko'rsatish
+                    statusEl.classList.add('hidden');
+                    resultEl.classList.remove('hidden');
                     tg.HapticFeedback.notificationOccurred('success');
-                    loadAppData(); // Update stats
+                    loadAppData(); // Statsni yangilash
+                } else {
+                    throw new Error(res.error || 'Tahlil natijasi bo\'sh');
                 }
             } catch (err) {
-                tg.showAlert(err.message);
+                console.error('Send audio error:', err);
+                statusEl.classList.add('hidden');
+                tg.showAlert('Xatolik: ' + err.message);
             } finally {
                 btnRecord.disabled = false;
-                analyzeStatus.classList.add('hidden');
             }
         }
 
