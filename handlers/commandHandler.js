@@ -2858,14 +2858,18 @@ class CommandHandler {
     }
 
     async processAiTestTopicInput(ctx) {
-        const topicName = ctx.message.text;
+        const topicName = ctx.message.text.trim();
+        if (!topicName) return ctx.reply('Mavzu nomini kiriting.');
+        
         ctx.session.aiTestTopic = topicName;
         ctx.session.state = 'waiting_for_ai_test_count';
         await ctx.reply(`Mavzu: *${topicName}*\n\nNechta savol yaratilsin? (Masalan: 5, 10, 15):`, { parse_mode: 'Markdown' });
     }
 
     async processAiTestCountInput(ctx) {
-        const count = parseInt(ctx.message.text);
+        const countInput = ctx.message.text.trim();
+        const count = parseInt(countInput);
+        
         if (isNaN(count) || count < 1 || count > 50) {
             return ctx.reply('Iltimos, 1 dan 50 gacha bo\'lgan raqam kiriting.');
         }
@@ -2877,9 +2881,9 @@ class CommandHandler {
             const geminiService = require('../services/geminiService');
             const questions = await geminiService.generateAiTests(topicName, count);
             
-            // Use supabaseAdmin for topics to bypass RLS
+            // Re-check for existing topic just before creating to avoid race conditions
             let topics = await database.getTopics('test');
-            let topic = topics.find(t => t.title.toLowerCase() === topicName.toLowerCase());
+            let topic = topics.find(t => t.title.trim().toLowerCase() === topicName.toLowerCase());
             
             if (!topic) {
                 topic = await database.addTopic({
