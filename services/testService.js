@@ -118,8 +118,7 @@ class TestService {
             console.error('Error saving test results:', e.message);
         }
 
-        // Keep session for a while to show final results, or delete immediately
-        // this.sessions.delete(userId);
+        this.sessions.delete(userId);
     }
 
     getProgressBar(current, total, length = 10) {

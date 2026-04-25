@@ -2780,6 +2780,10 @@ class CommandHandler {
                 const result = await testService.submitAnswer(ctx.from.id, null); // null means timeout
                 if (result) {
                     if (result.isFinished) {
+                        if (session.timer) {
+                            clearTimeout(session.timer);
+                            session.timer = null;
+                        }
                         return this.showTestResults(ctx, result);
                     } else {
                         return this.sendTestQuestion(ctx, currentSession);
@@ -2823,6 +2827,10 @@ class CommandHandler {
         const result = await testService.submitAnswer(ctx.from.id, answerIndex);
 
         if (result.isFinished) {
+            if (session.timer) {
+                clearTimeout(session.timer);
+                session.timer = null;
+            }
             return this.showTestResults(ctx, result);
         }
 
