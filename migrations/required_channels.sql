@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS required_channels (
     channel_id TEXT NOT NULL UNIQUE,
     channel_url TEXT NOT NULL DEFAULT '',
     channel_name TEXT NOT NULL DEFAULT 'Kanal',
+    is_private BOOLEAN DEFAULT false,
+    invite_link TEXT DEFAULT '',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

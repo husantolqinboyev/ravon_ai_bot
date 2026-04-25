@@ -1497,7 +1497,9 @@ class Database {
                     return config.REQUIRED_CHANNELS.map(ch => ({
                         channel_id: ch.id,
                         channel_url: ch.url,
-                        channel_name: ch.name
+                        channel_name: ch.name,
+                        is_private: false,
+                        invite_link: ''
                     }));
                 }
                 throw error;
@@ -1508,7 +1510,9 @@ class Database {
                 return config.REQUIRED_CHANNELS.map(ch => ({
                     channel_id: ch.id,
                     channel_url: ch.url,
-                    channel_name: ch.name
+                    channel_name: ch.name,
+                    is_private: false,
+                    invite_link: ''
                 }));
             }
 
@@ -1519,7 +1523,9 @@ class Database {
             return config.REQUIRED_CHANNELS.map(ch => ({
                 channel_id: ch.id,
                 channel_url: ch.url,
-                channel_name: ch.name
+                channel_name: ch.name,
+                is_private: false,
+                invite_link: ''
             }));
         }
     }
@@ -1532,6 +1538,7 @@ class Database {
                     channel_id: String(channelId),
                     channel_url: channelUrl,
                     channel_name: channelName,
+                    is_private: channelUrl.includes('+') || channelUrl.includes('joinchat'), // Simple detection
                     is_active: true
                 }, { onConflict: 'channel_id' })
                 .select()
@@ -1557,6 +1564,21 @@ class Database {
         } catch (error) {
             console.error('Error removing required channel:', error);
             throw error;
+        }
+    }
+
+    async updateUserChannelLinks(telegramId, channelLinks) {
+        try {
+            const { error } = await this.supabase
+                .from('users')
+                .update({ channel_links: channelLinks })
+                .eq('telegram_id', telegramId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error updating user channel links:', error);
+            return false;
         }
     }
 

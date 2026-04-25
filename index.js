@@ -67,37 +67,88 @@ bot.use(async (ctx, next) => {
 
 // Helper: barcha majburiy kanallarni tekshirish (DB dan)
 const invalidRequiredChannels = new Set();
-async function checkAllChannels(telegram, userId) {
+async function checkAllChannels(ctx) {
+    const userId = ctx.from.id;
     const results = [];
     let channels = [];
     try {
         channels = await database.getRequiredChannels();
     } catch (e) {
-        channels = config.REQUIRED_CHANNELS.map(ch => ({ channel_id: ch.id, channel_url: ch.url, channel_name: ch.name }));
+        channels = config.REQUIRED_CHANNELS.map(ch => ({ 
+            channel_id: ch.id, 
+            channel_url: ch.url, 
+            channel_name: ch.name,
+            is_private: false
+        }));
     }
+
+    const userChannelLinks = ctx.state.user?.channel_links || {};
+    let linksUpdated = false;
+
     for (const channel of channels) {
         const id = channel.channel_id || channel.id;
         if (invalidRequiredChannels.has(id)) continue;
+        
         const name = channel.channel_name || channel.name;
-        const url = channel.channel_url || channel.url;
+        let url = channel.channel_url || channel.url;
+        const isPrivate = channel.is_private;
+
         try {
-            const member = await telegram.getChatMember(id, userId);
+            const member = await ctx.telegram.getChatMember(id, userId);
             const isMember = ['member', 'administrator', 'creator'].includes(member.status);
-            if (!isMember) results.push({ id, name, url });
+            
+            if (!isMember) {
+                // If private, try to use or create unique invite link
+                if (isPrivate) {
+                    if (userChannelLinks[id]) {
+                        url = userChannelLinks[id];
+                    } else {
+                        try {
+                            const invite = await ctx.telegram.createChatInviteLink(id, {
+                                name: `User ${userId}`,
+                                member_limit: 1
+                            });
+                            url = invite.invite_link;
+                            userChannelLinks[id] = url;
+                            linksUpdated = true;
+                        } catch (linkErr) {
+                            console.error(`Invite link creation failed for ${id}:`, linkErr.message);
+                            // Fallback to existing url
+                        }
+                    }
+                }
+                results.push({ id, name, url });
+            }
         } catch (err) {
             const description = err?.response?.description || err?.message || '';
             const isChatNotFound = err?.response?.error_code === 400 && description.includes('chat not found');
             const isUserNotFound = err?.response?.error_code === 400 && description.includes('user not found');
 
-            // Invalid/missing channel id: skip it to avoid noisy repeated errors.
             if (isChatNotFound) {
                 invalidRequiredChannels.add(id);
                 console.warn(`Majburiy kanal topilmadi (${id}). Bu kanal keyingi tekshiruvlarda o'tkazib yuboriladi.`);
                 continue;
             }
 
-            // User has never joined this channel yet.
             if (isUserNotFound) {
+                // Same logic for unique links if user not found (means not in channel)
+                if (isPrivate) {
+                    if (userChannelLinks[id]) {
+                        url = userChannelLinks[id];
+                    } else {
+                        try {
+                            const invite = await ctx.telegram.createChatInviteLink(id, {
+                                name: `User ${userId}`,
+                                member_limit: 1
+                            });
+                            url = invite.invite_link;
+                            userChannelLinks[id] = url;
+                            linksUpdated = true;
+                        } catch (linkErr) {
+                            // ignore
+                        }
+                    }
+                }
                 results.push({ id, name, url });
                 continue;
             }
@@ -105,7 +156,13 @@ async function checkAllChannels(telegram, userId) {
             console.error(`Kanal tekshirishda xato (${id}):`, description);
         }
     }
-    return results; // a'zo bo'lmagan kanallar ro'yxati
+
+    if (linksUpdated) {
+        await database.updateUserChannelLinks(userId, userChannelLinks);
+        if (ctx.state.user) ctx.state.user.channel_links = userChannelLinks;
+    }
+
+    return results;
 }
 
 // Channel Membership Middleware
@@ -131,7 +188,7 @@ bot.use(async (ctx, next) => {
     await database.checkPremiumStatus(userId);
 
     try {
-        const notMemberOf = await checkAllChannels(ctx.telegram, userId);
+        const notMemberOf = await checkAllChannels(ctx);
 
         if (notMemberOf.length > 0) {
             const channelButtons = notMemberOf.map(ch => [
@@ -158,7 +215,7 @@ bot.use(async (ctx, next) => {
 bot.action('check_subscription', async (ctx) => {
     const userId = ctx.from.id;
     try {
-        const notMemberOf = await checkAllChannels(ctx.telegram, userId);
+        const notMemberOf = await checkAllChannels(ctx);
 
         if (notMemberOf.length === 0) {
             await safeAnswerCbQuery(ctx, "✅ Rahmat! Endi botdan foydalanishingiz mumkin.");

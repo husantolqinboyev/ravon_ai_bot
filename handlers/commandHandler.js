@@ -2416,13 +2416,15 @@ class CommandHandler {
                     const name = ch.channel_name || ch.name || 'Nomsiz';
                     const id = ch.channel_id || ch.id || '?';
                     const url = ch.channel_url || ch.url || '';
-                    msg += `${i + 1}. *${name}*\n`;
+                    const isPrivate = ch.is_private ? '🔒 Maxfiy' : '📢 Ochiq';
+                    
+                    msg += `${i + 1}. *${name}* (${isPrivate})\n`;
                     msg += `   🆔 ID: \`${id}\`\n`;
                     msg += `   🔗 ${url}\n\n`;
                 });
             }
 
-            msg += `\n📌 Kanal qo'shish uchun "+" tugmasini bosing.`;
+            msg += `\n📌 Kanal qo'shish uchun "+" tugmasini bosing.\n💡 *Maxfiy kanallar:* Bot unikal taklif havolalarini avtomatik yaratadi.`;
 
             const buttons = [];
 
@@ -2450,7 +2452,7 @@ class CommandHandler {
             }
         } catch (error) {
             console.error('handleChannels error:', error);
-            const errMsg = 'Kanallar ro\'yxatini olishda xatolik yuz berdi.';
+            const errMsg = `Xatolik: ${error.message || 'Kanallar ro\'yxatini olishda xatolik yuz berdi.'}`;
             if (ctx.callbackQuery) {
                 await ctx.answerCbQuery(errMsg, { show_alert: true }).catch(() => {});
             } else {
@@ -2473,6 +2475,7 @@ class CommandHandler {
             `\`kanal_id | kanal_nomi | kanal_url\`\n\n` +
             `📌 *Misol:*\n` +
             `\`-1001234567890 | English Channel | https://t.me/english_channel\`\n\n` +
+            `⚠️ *Maxfiy kanallar:* Agar kanal url-manzili \`https://t.me/+\` bilan boshlansa, bot uni maxfiy deb hisoblaydi va har bir foydalanuvchi uchun unikal link yaratadi.\n\n` +
             `⚠️ Bot kanalda *admin* bo'lishi shart!\n\n` +
             `❌ Bekor qilish uchun /admin yozing.`;
 
@@ -2571,11 +2574,14 @@ class CommandHandler {
 
             ctx.session.state = null;
 
+            const isPrivate = finalUrl.includes('+') || finalUrl.includes('joinchat');
+
             await ctx.reply(
                 `✅ *Kanal muvaffaqiyatli qo'shildi!*\n\n` +
                 `📢 Kanal: *${finalName}*\n` +
                 `🆔 ID: \`${channelId}\`\n` +
-                `🔗 URL: ${finalUrl}\n\n` +
+                `🔗 URL: ${finalUrl}\n` +
+                `🔒 Turi: ${isPrivate ? 'Maxfiy' : 'Ochiq'}\n\n` +
                 `Endi foydalanuvchilar botdan foydalanish uchun ushbu kanalga a'zo bo'lishlari kerak.`,
                 { parse_mode: 'Markdown' }
             );
